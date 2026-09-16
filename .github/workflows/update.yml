@@ -30,10 +30,9 @@ jobs:
           git commit -m "chore: refresh catalog $(date -u +%Y-%m-%d)"
           git push
 
-      - name: Deploy to Cloudflare Pages
-        if: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+      - name: Deploy Worker
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site --project-name=open-app-catalog
+          command: deploy
