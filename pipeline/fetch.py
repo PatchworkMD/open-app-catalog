@@ -104,11 +104,11 @@ def estimate_revenue(rank: int, genre_label: str) -> str:
     return f"~${estimate:.0f}/mo (estimated)"
 
 
-def save_screenshot(url: str) -> dict | None:
+def save_image(url: str) -> dict | None:
     try:
         raw = http_bytes(url)
     except Exception as exc:  # noqa: BLE001 - keep pipeline running on single failures
-        print(f"  screenshot failed: {url}: {exc}", file=sys.stderr)
+        print(f"  image failed: {url}: {exc}", file=sys.stderr)
         return None
     digest = hashlib.sha256(raw).hexdigest()
     ext = "jpg" if url.lower().endswith((".jpg", ".jpeg")) else "png"
@@ -116,6 +116,9 @@ def save_screenshot(url: str) -> dict | None:
     if not path.exists():
         path.write_bytes(raw)
     return {"id": digest, "kind": "image", "path": f"assets/{digest}.{ext}"}
+
+
+save_screenshot = save_image
 
 
 def build() -> dict:
@@ -153,6 +156,8 @@ def build() -> dict:
                         "sourceUrl": d.get("trackViewUrl"),
                     }
                 )
+            icon_url = d.get("artworkUrl512") or d.get("artworkUrl100") or d.get("artworkUrl60")
+            saved_icon = save_image(icon_url) if icon_url else None
             apps.append(
                 {
                     "id": app_id,
@@ -164,6 +169,7 @@ def build() -> dict:
                     "rating": d.get("averageUserRating"),
                     "ratingCount": d.get("userRatingCount"),
                     "assetIds": asset_ids,
+                    "iconPath": saved_icon["path"] if saved_icon else None,
                     "revenueLabel": estimate_revenue(rank, label),
                 }
             )
