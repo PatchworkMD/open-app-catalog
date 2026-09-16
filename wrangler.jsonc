@@ -2,7 +2,11 @@
   "name": "open-app-catalog",
   "account_id": "bc63168e55fcaa26c774d21c050704fa",
   "compatibility_date": "2026-09-01",
+  "workers_dev": true,
   "assets": {
     "directory": "./site"
-  }
+  },
+  "routes": [
+    { "pattern": "catalog.patchworkmd.dev", "custom_domain": true }
+  ]
 }
