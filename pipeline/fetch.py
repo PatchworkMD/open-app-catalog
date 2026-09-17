@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE_DIR = ROOT / "site"
 ASSETS_DIR = SITE_DIR / "assets"
 STORE = "us"
-CHART_LIMIT = 25
+CHART_LIMIT = 200
 SCREENSHOTS_PER_APP = 4
 USER_AGENT = "open-app-catalog/0.1 (+https://github.com/PatchworkMD/open-app-catalog)"
 
