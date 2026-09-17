@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let data,limit=48,selected=new Set(),board=[];
 try{board=JSON.parse(localStorage.getItem('oac-board')||'[]');if(!Array.isArray(board))board=[]}catch{board=[]}
-const route=()=>location.hash.slice(1)||'screens';
+const route=()=>location.hash.slice(1)||'apps';
 const sourceLink=u=>/^https:\/\/(apps\.apple\.com|itunes\.apple\.com|developer\.apple\.com|github\.com)\//.test(u||'')?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>`:'';
 function media(s){const p=String(s.path||'');if(!/^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p))return '<span>Media unavailable</span>';return `<img src="${esc(p)}" loading="lazy" alt="${esc(s.title||'App Store screenshot')}" onerror="this.replaceWith(document.createTextNode('Image unavailable'))">`}
 function appIcon(x){const p=String(x.iconPath||'');if(!/^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p))return '<div class="icon-ph"></div>';return `<img class="icon" src="${esc(p)}" loading="lazy" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">`}
