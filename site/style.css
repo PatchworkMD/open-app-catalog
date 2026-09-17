@@ -1,8 +1,13 @@
+@font-face{font-family:'Bricolage Grotesque';src:url(fonts/bricolage-grotesque-latin.woff2) format('woff2');font-weight:400 800;font-display:swap;font-style:normal;size-adjust:100%}
+@font-face{font-family:'Archivo';src:url(fonts/archivo-latin.woff2) format('woff2');font-weight:400 700;font-display:swap;font-style:normal}
 *{box-sizing:border-box}
 
 :root{
   color-scheme:dark;
-  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-family:'Archivo',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-display:'Bricolage Grotesque','Archivo',-apple-system,sans-serif;
+  font-synthesis-weight:none;
+  -webkit-font-smoothing:antialiased;
   --bg:#0a0b0d;
   --surface:#1a1c22;
   --surface-2:#24262e;
@@ -33,7 +38,7 @@ header{
   background:rgba(10,11,13,.72);
   backdrop-filter:blur(16px);
 }
-.brand{display:flex;align-items:center;gap:12px;font-size:19px;font-weight:700;letter-spacing:-.02em;text-decoration:none}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-size:20px;font-weight:750;letter-spacing:-.025em;text-decoration:none}
 .brandmark{
   display:grid;place-items:center;width:34px;height:34px;border-radius:10px;
   background:linear-gradient(135deg,var(--accent),var(--accent-2));
@@ -50,8 +55,8 @@ nav a.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1p
 
 main{max-width:1440px;margin:0 auto;padding:var(--sp-8) clamp(16px,4vw,48px);min-height:75vh}
 .hero{position:relative;text-align:center;padding:110px 20px 90px;margin:-32px -4vw 40px;overflow:hidden}
-.hero h2{font-size:clamp(40px,6vw,56px);font-weight:800;letter-spacing:-.03em;margin:0 0 16px;line-height:1.1}
-.hero p{font-size:18px;color:var(--muted);margin:0 0 32px;max-width:600px;margin-left:auto;margin-right:auto;line-height:1.6}
+.hero h2{font-family:var(--font-display);font-size:clamp(42px,6.4vw,84px);font-weight:800;letter-spacing:-.035em;margin:0 0 18px;line-height:.98;text-wrap:balance}
+.hero p{font-size:clamp(17px,1.5vw,19px);color:#b6bac6;margin:0 0 34px;max-width:52ch;margin-left:auto;margin-right:auto;line-height:1.62;letter-spacing:.005em;text-wrap:pretty}
 .hero-cta{background:linear-gradient(135deg,#d4a574,#c9935e) !important;border:none !important;color:#0a0b0d !important;font-weight:700;padding:14px 32px;border-radius:12px;font-size:16px;cursor:pointer;transition:transform .15s,filter .15s}
 .hero-cta:hover{transform:translateY(-2px);filter:brightness(1.1)}
 .hero-cta:active{transform:scale(.98)}
@@ -67,9 +72,8 @@ main{max-width:1440px;margin:0 auto;padding:var(--sp-8) clamp(16px,4vw,48px);min
 .float-card.f6{top:46%;right:17%;animation-delay:4.2s;--tilt:8deg;width:104px;height:140px}
 @keyframes float{0%,100%{transform:translateY(0) rotate(var(--tilt,-2deg)) scale(1)}50%{transform:translateY(-22px) rotate(calc(var(--tilt,2deg) * -.6)) scale(1.04)}}
 .heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
-.eyebrow{font-size:12px;font-weight:700;letter-spacing:.16em;background:linear-gradient(90deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent;margin:0 0 10px}
-h1{font-size:clamp(30px,3.4vw,40px);font-weight:700;letter-spacing:-.04em;margin:0}
-h2{font-weight:600}
+h1{font-family:var(--font-display);font-size:clamp(32px,3.6vw,46px);font-weight:700;letter-spacing:-.03em;line-height:1.04;margin:0}
+h2{font-family:var(--font-display);font-weight:650;letter-spacing:-.02em}
 
 button,input,select{font:inherit;color:inherit;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:11px 14px;transition:background .12s,border-color .12s,transform .08s}
 button{cursor:pointer}
@@ -107,7 +111,7 @@ input,select{font-size:15px;background:var(--surface-2)}
 .pinoverlay{display:none}
 .pinrank{position:absolute;top:8px;right:8px;background:rgba(110,143,255,.95);color:#fff;font-size:12px;font-weight:700;padding:6px 10px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:2;font-variant-numeric:tabular-nums}
 .pincaption{font-size:13px;font-weight:700;line-height:1.35;margin:0 0 4px;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-.01em}
-.pinmeta{color:var(--muted);font-size:11px;opacity:0.75;font-weight:500}
+.pinmeta{color:#a2a7b5;font-size:11px;font-weight:500;letter-spacing:.01em}
 .pinactions{display:none}
 .pinactions button{font-size:11px;padding:6px 9px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18);backdrop-filter:blur(6px)}
 .pinactions button:hover{background:rgba(255,255,255,.2)}
@@ -187,3 +191,7 @@ footer{padding:var(--sp-6) 4vw;color:var(--muted);font-size:12px;border-top:1px 
 
 .hero h2,.hero p,.hero-cta{position:relative;z-index:1}
 .hero h2{text-shadow:0 2px 24px rgba(10,11,13,.85)}
+
+/* hero art stays art: never let it fight the words */
+.hero::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,92%);height:min(420px,72%);background:radial-gradient(ellipse at center,rgba(10,11,13,.92) 0%,rgba(10,11,13,.72) 45%,transparent 72%);pointer-events:none;z-index:0}
+@media(max-width:700px){.hero{padding:72px 18px 64px}.float-card{width:78px;height:104px}.float-card.f5,.float-card.f6{display:none}.float-card:has(img){opacity:.32}.float-card.f1{top:4%;left:-2%}.float-card.f2{top:6%;right:-2%}.float-card.f3{bottom:4%;left:2%}.float-card.f4{bottom:4%;right:2%}.hero-logo{font-size:min(330px,78vw)}}
