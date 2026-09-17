@@ -46,3 +46,20 @@ are configured) redeploys the site — no manual step required.
 
 MIT for the code (see [LICENSE](LICENSE)). Fetched App Store metadata,
 screenshots, and trademarks remain the property of their respective owners.
+
+## Media storage
+
+Screenshots and icons live in the `open-app-catalog-assets` R2 bucket, not in
+this repo and not in the deploy. `worker/index.js` serves `/assets/*` from that
+bucket on the catalog's own domain; `site/.assetsignore` keeps the local copies
+out of the Worker upload, which is what keeps deploys to a few seconds.
+
+`site/assets/` is gitignored: `pipeline/fetch.py` rebuilds it from Apple on
+every run. To push a run's new media to R2:
+
+```
+CLOUDFLARE_ACCOUNT_ID=<account owning the bucket> CATALOG_R2_UPLOAD=1 python3 pipeline/fetch.py
+```
+
+Wrangler's `r2` subcommands default to a different account than `wrangler.jsonc`
+targets, so `CLOUDFLARE_ACCOUNT_ID` must be set explicitly for them.

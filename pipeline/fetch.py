@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
 import sys
 import time
 import urllib.error
@@ -28,6 +30,10 @@ STORE = "us"
 CHART_LIMIT = 200
 SCREENSHOTS_PER_APP = 4
 USER_AGENT = "open-app-catalog/0.1 (+https://github.com/PatchworkMD/open-app-catalog)"
+# Media is served from R2 by the Worker, not shipped with the deploy; the local
+# copy under site/assets stays for offline development.
+R2_BUCKET = os.environ.get("CATALOG_R2_BUCKET", "open-app-catalog-assets")
+NEW_ASSETS: list[str] = []
 
 # genre id -> (label, rough monthly-ARPU-per-rank-1 estimate in USD, used only
 # as a documented, adjustable heuristic; see README "Revenue estimate" section)
@@ -115,6 +121,7 @@ def save_image(url: str) -> dict | None:
     path = ASSETS_DIR / f"{digest}.{ext}"
     if not path.exists():
         path.write_bytes(raw)
+        NEW_ASSETS.append(path.name)
     return {"id": digest, "kind": "image", "path": f"assets/{digest}.{ext}"}
 
 
@@ -186,12 +193,28 @@ def build() -> dict:
     return {"apps": apps, "screens": screens, "flows": [], "elements": [], "coverage": coverage}
 
 
+def upload_new_assets() -> None:
+    """Push this run's new media to R2. Skipped unless CATALOG_R2_UPLOAD=1."""
+    if os.environ.get("CATALOG_R2_UPLOAD") != "1" or not NEW_ASSETS:
+        return
+    print(f"uploading {len(NEW_ASSETS)} new assets to r2://{R2_BUCKET}")
+    for name in NEW_ASSETS:
+        result = subprocess.run(
+            ["npx", "wrangler", "r2", "object", "put",
+             f"{R2_BUCKET}/assets/{name}", "--file", str(ASSETS_DIR / name), "--remote"],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        if result.returncode != 0:
+            print(f"  upload failed: {name}: {result.stderr.strip()[-160:]}", file=sys.stderr)
+
+
 def main() -> None:
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     data = build()
     out = SITE_DIR / "data.json"
     out.write_text(json.dumps(data, indent=2, sort_keys=True))
     print(f"wrote {out} ({len(data['apps'])} apps, {len(data['screens'])} screens)")
+    upload_new_assets()
 
 
 if __name__ == "__main__":

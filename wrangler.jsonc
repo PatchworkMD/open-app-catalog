@@ -4,9 +4,23 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "assets": {
-    "directory": "./site"
+    "directory": "./site",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/assets/*"
+    ]
   },
   "routes": [
-    { "pattern": "catalog.patchworkmd.dev", "custom_domain": true }
-  ]
+    {
+      "pattern": "catalog.patchworkmd.dev",
+      "custom_domain": true
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "open-app-catalog-assets"
+    }
+  ],
+  "main": "worker/index.js"
 }
