@@ -21,6 +21,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,12 +137,13 @@ def build() -> dict:
 
     for genre_id, (label, _arpu) in GENRES.items():
         print(f"charts: {label}")
-        chart_ids = [i for i in fetch_chart_ids(genre_id) if i not in seen_ids]
+        feed_ids = fetch_chart_ids(genre_id)
+        rank_by_id = {app_id: rank + 1 for rank, app_id in enumerate(feed_ids)}
+        chart_ids = [i for i in feed_ids if i not in seen_ids]
         seen_ids.update(chart_ids)
         if not chart_ids:
             continue
         details = lookup_apps(chart_ids)
-        rank_by_id = {app_id: rank + 1 for rank, app_id in enumerate(chart_ids)}
         for d in details:
             app_id = str(d.get("trackId", ""))
             if not app_id:
@@ -187,34 +189,49 @@ def build() -> dict:
         "source": "Apple iTunes Search/RSS public APIs only",
         "apps": len(apps),
         "screens": len(screens),
+        "rankBasis": "original-category-feed",
+        "chartStore": STORE,
+        "chartType": "topfreeapplications",
         "note": "Revenue figures are heuristic estimates from public chart rank, "
         "not verified sales. See README for the formula.",
     }
     return {"apps": apps, "screens": screens, "flows": [], "elements": [], "coverage": coverage}
 
 
-def upload_new_assets() -> None:
-    """Push this run's new media to R2. Skipped unless CATALOG_R2_UPLOAD=1."""
-    if os.environ.get("CATALOG_R2_UPLOAD") != "1" or not NEW_ASSETS:
+def upload_new_assets(data: dict) -> None:
+    if os.environ.get("CATALOG_R2_UPLOAD") != "1":
         return
-    print(f"uploading {len(NEW_ASSETS)} new assets to r2://{R2_BUCKET}")
-    for name in NEW_ASSETS:
+    names = {Path(item["path"]).name for item in data["screens"]}
+    names.update(Path(app["iconPath"]).name for app in data["apps"] if app.get("iconPath"))
+    missing = sorted(name for name in names if not (ASSETS_DIR / name).is_file())
+    if missing:
+        raise RuntimeError(f"{len(missing)} referenced assets missing")
+    names = sorted(names)
+    def upload(name: str) -> None:
         result = subprocess.run(
             ["npx", "wrangler", "r2", "object", "put",
              f"{R2_BUCKET}/assets/{name}", "--file", str(ASSETS_DIR / name), "--remote"],
             capture_output=True, text=True, cwd=ROOT,
         )
         if result.returncode != 0:
-            print(f"  upload failed: {name}: {result.stderr.strip()[-160:]}", file=sys.stderr)
+            raise RuntimeError(f"asset upload failed for {name}")
+
+    print(f"uploading {len(names)} assets to r2://{R2_BUCKET}")
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(upload, names))
 
 
 def main() -> None:
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     data = build()
+    if not data["apps"] or not data["screens"]:
+        raise RuntimeError("catalog build returned an empty snapshot")
     out = SITE_DIR / "data.json"
-    out.write_text(json.dumps(data, indent=2, sort_keys=True))
+    upload_new_assets(data)
+    temp = out.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(data, indent=2, sort_keys=True))
+    temp.replace(out)
     print(f"wrote {out} ({len(data['apps'])} apps, {len(data['screens'])} screens)")
-    upload_new_assets()
 
 
 if __name__ == "__main__":

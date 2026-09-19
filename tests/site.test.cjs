@@ -1,0 +1,75 @@
+// Run against the local preview: node tests/site.test.cjs
+const {chromium} = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+(async () => {
+  const browser = await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
+  const page = await browser.newPage({viewport:{width:1440,height:1000}});
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  const base = process.env.CATALOG_TEST_URL || 'http://127.0.0.1:8765/';
+  const evidence = await fs.mkdtemp(path.join(os.tmpdir(),'hugging-app-qa-'));
+  try {
+    await page.goto(base + '#apps');
+    await page.locator('.app-open').first().waitFor();
+    assert.equal(await page.locator('.app-open').count(),48);
+    await page.locator('.app-open').first().press('Enter');
+    assert.equal(await page.locator('#viewer').evaluate(el => el.open),true);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.scrollTo(0,0));
+    await page.screenshot({path:path.join(evidence,'desktop.png')});
+    await page.getByRole('link',{name:'Screens',exact:true}).click();
+    await page.waitForFunction(() => document.querySelector('#title').textContent === 'Screens');
+    await page.locator('#content [data-save]').first().click();
+    await page.locator('#content [data-select]').nth(0).click();
+    await page.locator('#content [data-select]').nth(1).click();
+    await page.locator('#compare').click();
+    assert.equal(await page.locator('.comparegrid .pin').count(),2);
+    await page.locator('#viewer [data-save]').first().click();
+    assert.equal(await page.locator('#content [data-save]').first().getAttribute('aria-pressed'),'false');
+    await page.keyboard.press('Escape');
+    await page.locator('#content [data-save]').first().click();
+    await page.getByRole('link',{name:'Saved board',exact:true}).click();
+    await page.waitForFunction(() => document.querySelector('#title').textContent === 'Saved board');
+    assert.equal(await page.locator('#content .pin').count(),1);
+    const [download] = await Promise.all([page.waitForEvent('download'),page.locator('#export').click()]);
+    const exported = JSON.parse(await fs.readFile(await download.path(),'utf8'));
+    assert.equal(exported.records.length,1); assert.equal(exported.route,'boards');
+    await page.reload(); await page.locator('#content .pin').waitFor();
+    await page.locator('#content [data-save]').click();
+    await page.getByText('Your board is empty.',{exact:true}).waitFor();
+    await page.goto(base + '#screens');
+    await page.locator('#search').fill('zzzz-no-such-app-zzzz');
+    await page.getByText('No matching results',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Clear filters'}).click();
+    assert.equal(await page.locator('#content .pin').count(),48);
+    await page.locator('#category').selectOption('Education');
+    assert((await page.locator('#content .pinmeta').allTextContents()).every(x => x==='Education'));
+    for (const route of ['flows','elements','agents','plugin','unknown']) {
+      await page.goto(base + '#' + route);
+      await page.waitForFunction(() => document.querySelector('#coverage').textContent.includes('Snapshot'));
+      if (['agents','plugin'].includes(route)) assert.equal(await page.locator('#export').isVisible(),false);
+      if (route==='unknown') assert.equal(await page.locator('#title').textContent(),'Apps');
+    }
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({path:path.join(evidence,'mobile.png')});
+    await page.goto(base + '#plugin'); await page.locator('.doc h2').waitFor();
+    await page.screenshot({path:path.join(evidence,'plugin.png')});
+    const blocked = await browser.newPage();
+    await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));
+    await blocked.goto(base); await blocked.getByRole('button',{name:'Try again'}).waitFor();
+    assert.equal(await blocked.locator('#export').isEnabled(),false);
+    await blocked.close();
+    const storage = await browser.newPage();
+    await storage.addInitScript(() => { Storage.prototype.setItem = () => {throw new Error('denied')}; });
+    await storage.goto(base + '#screens'); await storage.locator('[data-save]').first().click();
+    assert.match(await storage.locator('#status').textContent(),/Storage unavailable/);
+    await storage.close();
+    assert.deepEqual(errors,[]);
+    console.log('PASS: keyboard, comparison sync, board persistence/export, filters, routes, mobile, load failure, storage failure');
+    console.log('Screenshots: ' + evidence);
+  } finally { await browser.close(); }
+})().catch(e => { console.error(e); process.exitCode=1; });
