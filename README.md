@@ -126,3 +126,14 @@ CLOUDFLARE_ACCOUNT_ID=<account owning the bucket> CATALOG_R2_UPLOAD=1 python3 pi
 
 Wrangler's `r2` subcommands default to a different account than `wrangler.jsonc`
 targets, so `CLOUDFLARE_ACCOUNT_ID` must be set explicitly for them.
+
+## Curated interface references
+
+`site/curation.json` contains visually reviewed UI patterns and editorial screenshot
+collections. Each record references an existing screenshot by its content hash.
+The browser excludes missing references after a catalog refresh. Collections are
+not recorded interaction flows; the interface labels their order as unverified.
+Review source images before adding tags. Keep the source URL and review date.
+
+The initial library includes 7 collections and 25 UI elements from 7 apps.
+These are manual visual annotations, not Jev classification output.

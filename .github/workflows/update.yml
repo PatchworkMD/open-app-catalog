@@ -36,6 +36,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Check pipeline and site syntax
+        run: |
+          python3 -m unittest discover -s pipeline -p 'test_*.py'
+          node --check site/app.js
+
       - name: Check Cloudflare credentials
         run: test -n "$CLOUDFLARE_API_TOKEN"
 

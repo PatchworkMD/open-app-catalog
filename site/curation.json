@@ -1,0 +1,635 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-19",
+  "source": "Apple developer-published listing screenshots",
+  "method": "Visual review of the referenced images. Collection order is editorial, not a recorded user journey.",
+  "flows": [
+    {
+      "id": "collection-6446901002",
+      "title": "Community and discovery",
+      "category": "Social Networking",
+      "appId": "6446901002",
+      "assetIds": [
+        "55b5eec88f3ece122f889aa2b12bc03897039a70754e8826131a021dc1c69001",
+        "d53d2883472f65441f9966aa81d5a86ce4e0e138b09ad4d41b6124ac853cd21c",
+        "2213ec32d61babd99ae09a83a72d6d86cca85f648fb967c2477dd75ea3d131f2",
+        "a40109b4aff73df8bee2b5b5f82ec33f33759b12ac87e3a3b0cbaddd81fd5f19"
+      ],
+      "description": "Threads: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "button",
+        "community",
+        "discovery",
+        "feed",
+        "header",
+        "list",
+        "navigation",
+        "poll",
+        "progress",
+        "search",
+        "social",
+        "tab bar"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "collection-686449807",
+      "title": "Messaging and expression",
+      "category": "Social Networking",
+      "appId": "686449807",
+      "assetIds": [
+        "172b849446016179c3eebe26f28f782f1051b3e4c584855515549e7b7181ea10",
+        "488dfbde2f470fc2d136e04b35d78f02748ebc72ce91c26d08b5a10e30b190c8",
+        "b7aab48ae990357939c3b565ddbc4fc9acd905961bbb8b08f6c2d1fd18ddf4dd",
+        "0bb96c3a9b3b13c82e3d96b800b37bdeb8ae92476b42ff11b8b601c45e56d610"
+      ],
+      "description": "Telegram Messenger: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "audio",
+        "badge",
+        "chat",
+        "composer",
+        "emoji",
+        "grid",
+        "input",
+        "list",
+        "media",
+        "messages",
+        "picker",
+        "tabs"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "collection-985746746",
+      "title": "Community chat and calls",
+      "category": "Social Networking",
+      "appId": "985746746",
+      "assetIds": [
+        "bf497e271871b5331ecc3defdf9547d73e59537365d3f9e8e06a296cc759e7a0",
+        "e0e7169f46167826d305e850b0931c57f261c0c57602df8f1964d43081a50614",
+        "b3ccd2607451b5950073d953aeb415078fe5688f24a5eed5b6f191c95aae7932",
+        "a9c24e70aec8f56cee4ff01ac325aa12960d71c310ff7be93a4adcdcd3132e28"
+      ],
+      "description": "Discord - Talk, Play, Hang Out: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "avatar",
+        "badge",
+        "button",
+        "channel",
+        "controls",
+        "drawer",
+        "grid",
+        "presence",
+        "search",
+        "sticker",
+        "video",
+        "voice"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "collection-874139669",
+      "title": "Private conversations and calls",
+      "category": "Social Networking",
+      "appId": "874139669",
+      "assetIds": [
+        "a4238d228b5eb80e73877c3679c0bbc0b622d784a1f72c98371b297c477e1037",
+        "76f5eb3cc17ffc969bb146a047e9cdcc2c7b12a1ddd9424eadcef12572657bf8",
+        "477a66cd12f0fedc2e052535ff5478b953e85731fd6bc3d995d63b3bc7d5cac2",
+        "b2e23f51d96c97dfa5b63ddc974a050d13cbb45448a1483ba8869971195ca528"
+      ],
+      "description": "Signal - Private Messenger: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "audio",
+        "chat",
+        "controls",
+        "grid",
+        "list",
+        "overlay",
+        "pinned",
+        "reply",
+        "search",
+        "story",
+        "video",
+        "waveform"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "collection-429047995",
+      "title": "Visual discovery and shopping",
+      "category": "Lifestyle",
+      "appId": "429047995",
+      "assetIds": [
+        "a1ca9e98c2dd007665cb288a0fe4c40d5922c81a70aeff93494bb4a373940744",
+        "78d9642aa35361b166dd6da929a23ce41b5fdd2eec1d7cd070146284a2c88998",
+        "61cc81491fa025eefa3688389f257b8c1e3f72873ce58364461fec9a5dc83a91"
+      ],
+      "description": "Pinterest: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "bottom sheet",
+        "chips",
+        "discovery",
+        "filter",
+        "image",
+        "masonry",
+        "search",
+        "shopping"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "collection-493145008",
+      "title": "Content discovery and course selection",
+      "category": "Health & Fitness",
+      "appId": "493145008",
+      "assetIds": [
+        "08f6c98adef4f3ab93023748b24ee13f89dd444221e68d3e0b873f1c7dd0046b",
+        "c62916d74e077ee53f94534b5b9b68da2d4586eeb89c0f7f647884ab89d4d085",
+        "03cfdefd2080472957844bbcc2162a4b04bf2cabe5a445b42f5e2faba110c389"
+      ],
+      "description": "Headspace: Sleep & Meditation: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "button",
+        "category",
+        "content",
+        "course",
+        "dark mode",
+        "list",
+        "search",
+        "selection",
+        "tiles"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "collection-1232780281",
+      "title": "Workspace and page organization",
+      "category": "Productivity",
+      "appId": "1232780281",
+      "assetIds": [
+        "433f16994f245fe56ce7fbb8cbbdd05a91ad7a0039d4e60e306b8edb7281f176",
+        "789196ecc75da0b657c3659a6f6e88e3f55ce17880d6102858cf13a6d49f1c01",
+        "b17fd428aa647543e5b2a7eb9bec694d8a456d3fb8f89e844836f018f45e5c7f"
+      ],
+      "description": "Notion: Notes, Tasks, AI: related interface references from its public App Store listing. These images do not establish an interaction sequence.",
+      "evidence": "listing-collection",
+      "tags": [
+        "database",
+        "favorites",
+        "filter",
+        "hierarchy",
+        "list",
+        "navigation",
+        "toolbar"
+      ],
+      "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
+      "reviewedAt": "2026-09-19"
+    }
+  ],
+  "elements": [
+    {
+      "id": "element-6446901002-0",
+      "title": "Bottom tab bar",
+      "category": "Social Networking",
+      "screenId": "55b5eec88f3ece122f889aa2b12bc03897039a70754e8826131a021dc1c69001",
+      "description": "A persistent five-item tab bar anchors the feed below posts and inline reply actions.",
+      "tags": [
+        "navigation",
+        "tab bar",
+        "feed"
+      ],
+      "evidence": "visual-review",
+      "appId": "6446901002",
+      "appName": "Threads",
+      "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-6446901002-1",
+      "title": "Inline poll",
+      "category": "Social Networking",
+      "screenId": "d53d2883472f65441f9966aa81d5a86ce4e0e138b09ad4d41b6124ac853cd21c",
+      "description": "Poll choices show percentages within a post, with replies directly beneath.",
+      "tags": [
+        "poll",
+        "social",
+        "progress"
+      ],
+      "evidence": "visual-review",
+      "appId": "6446901002",
+      "appName": "Threads",
+      "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-6446901002-2",
+      "title": "Community header",
+      "category": "Social Networking",
+      "screenId": "2213ec32d61babd99ae09a83a72d6d86cca85f648fb967c2477dd75ea3d131f2",
+      "description": "A community title, member count, and Join action sit above its post feed.",
+      "tags": [
+        "community",
+        "header",
+        "button"
+      ],
+      "evidence": "visual-review",
+      "appId": "6446901002",
+      "appName": "Threads",
+      "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-6446901002-3",
+      "title": "Search and trending list",
+      "category": "Social Networking",
+      "screenId": "a40109b4aff73df8bee2b5b5f82ec33f33759b12ac87e3a3b0cbaddd81fd5f19",
+      "description": "A search field precedes trending topics and suggested accounts.",
+      "tags": [
+        "search",
+        "list",
+        "discovery"
+      ],
+      "evidence": "visual-review",
+      "appId": "6446901002",
+      "appName": "Threads",
+      "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-686449807-0",
+      "title": "Chat inbox",
+      "category": "Social Networking",
+      "screenId": "172b849446016179c3eebe26f28f782f1051b3e4c584855515549e7b7181ea10",
+      "description": "Avatar rows combine message previews, timestamps, unread counts, and category tabs.",
+      "tags": [
+        "chat",
+        "list",
+        "badge",
+        "tabs"
+      ],
+      "evidence": "visual-review",
+      "appId": "686449807",
+      "appName": "Telegram Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-686449807-1",
+      "title": "Voice-message composer",
+      "category": "Social Networking",
+      "screenId": "488dfbde2f470fc2d136e04b35d78f02748ebc72ce91c26d08b5a10e30b190c8",
+      "description": "The conversation includes a voice-message waveform and a prominent microphone control.",
+      "tags": [
+        "chat",
+        "audio",
+        "composer"
+      ],
+      "evidence": "visual-review",
+      "appId": "686449807",
+      "appName": "Telegram Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-686449807-2",
+      "title": "Emoji picker",
+      "category": "Social Networking",
+      "screenId": "b7aab48ae990357939c3b565ddbc4fc9acd905961bbb8b08f6c2d1fd18ddf4dd",
+      "description": "An emoji grid sits above category shortcuts inside the message composer.",
+      "tags": [
+        "emoji",
+        "picker",
+        "grid",
+        "input"
+      ],
+      "evidence": "visual-review",
+      "appId": "686449807",
+      "appName": "Telegram Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-686449807-3",
+      "title": "Message bubbles",
+      "category": "Social Networking",
+      "screenId": "0bb96c3a9b3b13c82e3d96b800b37bdeb8ae92476b42ff11b8b601c45e56d610",
+      "description": "Incoming and outgoing bubbles use opposing alignment around shared media.",
+      "tags": [
+        "chat",
+        "messages",
+        "media"
+      ],
+      "evidence": "visual-review",
+      "appId": "686449807",
+      "appName": "Telegram Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-985746746-0",
+      "title": "Sticker drawer",
+      "category": "Social Networking",
+      "screenId": "bf497e271871b5331ecc3defdf9547d73e59537365d3f9e8e06a296cc759e7a0",
+      "description": "Search and sticker categories appear in a drawer below the conversation.",
+      "tags": [
+        "sticker",
+        "drawer",
+        "search"
+      ],
+      "evidence": "visual-review",
+      "appId": "985746746",
+      "appName": "Discord - Talk, Play, Hang Out",
+      "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-985746746-1",
+      "title": "Group-call grid",
+      "category": "Social Networking",
+      "screenId": "a9c24e70aec8f56cee4ff01ac325aa12960d71c310ff7be93a4adcdcd3132e28",
+      "description": "Participant tiles share the screen with a compact row of call controls.",
+      "tags": [
+        "video",
+        "grid",
+        "controls"
+      ],
+      "evidence": "visual-review",
+      "appId": "985746746",
+      "appName": "Discord - Talk, Play, Hang Out",
+      "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-985746746-2",
+      "title": "Presence badges",
+      "category": "Social Networking",
+      "screenId": "e0e7169f46167826d305e850b0931c57f261c0c57602df8f1964d43081a50614",
+      "description": "Contacts and conversations show colored availability indicators beside avatars.",
+      "tags": [
+        "presence",
+        "badge",
+        "avatar"
+      ],
+      "evidence": "visual-review",
+      "appId": "985746746",
+      "appName": "Discord - Talk, Play, Hang Out",
+      "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-985746746-3",
+      "title": "Join voice action",
+      "category": "Social Networking",
+      "screenId": "b3ccd2607451b5950073d953aeb415078fe5688f24a5eed5b6f191c95aae7932",
+      "description": "A wide green Join Voice button sits beneath a channel and participant list.",
+      "tags": [
+        "button",
+        "voice",
+        "channel"
+      ],
+      "evidence": "visual-review",
+      "appId": "985746746",
+      "appName": "Discord - Talk, Play, Hang Out",
+      "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-874139669-0",
+      "title": "Pinned conversations",
+      "category": "Social Networking",
+      "screenId": "a4238d228b5eb80e73877c3679c0bbc0b622d784a1f72c98371b297c477e1037",
+      "description": "The inbox separates pinned conversations and shows search above message rows.",
+      "tags": [
+        "chat",
+        "pinned",
+        "search",
+        "list"
+      ],
+      "evidence": "visual-review",
+      "appId": "874139669",
+      "appName": "Signal - Private Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-874139669-1",
+      "title": "Audio message bubble",
+      "category": "Social Networking",
+      "screenId": "76f5eb3cc17ffc969bb146a047e9cdcc2c7b12a1ddd9424eadcef12572657bf8",
+      "description": "A voice recording uses a waveform and play control within the conversation.",
+      "tags": [
+        "audio",
+        "chat",
+        "waveform"
+      ],
+      "evidence": "visual-review",
+      "appId": "874139669",
+      "appName": "Signal - Private Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-874139669-2",
+      "title": "Video-call controls",
+      "category": "Social Networking",
+      "screenId": "477a66cd12f0fedc2e052535ff5478b953e85731fd6bc3d995d63b3bc7d5cac2",
+      "description": "A participant grid is paired with microphone, camera, more, and end-call controls.",
+      "tags": [
+        "video",
+        "controls",
+        "grid"
+      ],
+      "evidence": "visual-review",
+      "appId": "874139669",
+      "appName": "Signal - Private Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-874139669-3",
+      "title": "Story reply overlay",
+      "category": "Social Networking",
+      "screenId": "b2e23f51d96c97dfa5b63ddc974a050d13cbb45448a1483ba8869971195ca528",
+      "description": "A full-screen story overlays a close action, author attribution, and reply affordance.",
+      "tags": [
+        "story",
+        "overlay",
+        "reply"
+      ],
+      "evidence": "visual-review",
+      "appId": "874139669",
+      "appName": "Signal - Private Messenger",
+      "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-429047995-1",
+      "title": "Related-content bottom sheet",
+      "category": "Lifestyle",
+      "screenId": "78d9642aa35361b166dd6da929a23ce41b5fdd2eec1d7cd070146284a2c88998",
+      "description": "A partial sheet exposes related visual results below the focused image.",
+      "tags": [
+        "bottom sheet",
+        "discovery",
+        "image"
+      ],
+      "evidence": "visual-review",
+      "appId": "429047995",
+      "appName": "Pinterest",
+      "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-429047995-2",
+      "title": "Shopping suggestion chips",
+      "category": "Lifestyle",
+      "screenId": "61cc81491fa025eefa3688389f257b8c1e3f72873ce58364461fec9a5dc83a91",
+      "description": "Horizontal topic chips lead into a Shop similar panel with image results.",
+      "tags": [
+        "chips",
+        "shopping",
+        "bottom sheet"
+      ],
+      "evidence": "visual-review",
+      "appId": "429047995",
+      "appName": "Pinterest",
+      "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-429047995-3",
+      "title": "Visual search filters",
+      "category": "Lifestyle",
+      "screenId": "a1ca9e98c2dd007665cb288a0fe4c40d5922c81a70aeff93494bb4a373940744",
+      "description": "A search field, topic chips, color swatches, and masonry results share one view.",
+      "tags": [
+        "search",
+        "filter",
+        "chips",
+        "masonry"
+      ],
+      "evidence": "visual-review",
+      "appId": "429047995",
+      "appName": "Pinterest",
+      "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-493145008-1",
+      "title": "Content category tiles",
+      "category": "Health & Fitness",
+      "screenId": "08f6c98adef4f3ab93023748b24ee13f89dd444221e68d3e0b873f1c7dd0046b",
+      "description": "Four colored category tiles sit below search and above a featured program.",
+      "tags": [
+        "search",
+        "category",
+        "tiles"
+      ],
+      "evidence": "visual-review",
+      "appId": "493145008",
+      "appName": "Headspace: Sleep & Meditation",
+      "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-493145008-2",
+      "title": "Dark content list",
+      "category": "Health & Fitness",
+      "screenId": "c62916d74e077ee53f94534b5b9b68da2d4586eeb89c0f7f647884ab89d4d085",
+      "description": "Sleep content is arranged as illustrated rows within a dark interface.",
+      "tags": [
+        "dark mode",
+        "list",
+        "content"
+      ],
+      "evidence": "visual-review",
+      "appId": "493145008",
+      "appName": "Headspace: Sleep & Meditation",
+      "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-493145008-3",
+      "title": "Teacher selection",
+      "category": "Health & Fitness",
+      "screenId": "03cfdefd2080472957844bbcc2162a4b04bf2cabe5a445b42f5e2faba110c389",
+      "description": "Selectable teacher rows precede a Begin Course button on a course detail view.",
+      "tags": [
+        "selection",
+        "button",
+        "course"
+      ],
+      "evidence": "visual-review",
+      "appId": "493145008",
+      "appName": "Headspace: Sleep & Meditation",
+      "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-1232780281-1",
+      "title": "Workspace shortcuts",
+      "category": "Productivity",
+      "screenId": "433f16994f245fe56ce7fbb8cbbdd05a91ad7a0039d4e60e306b8edb7281f176",
+      "description": "Recent-page cards sit above an expandable favorites list.",
+      "tags": [
+        "navigation",
+        "list",
+        "favorites"
+      ],
+      "evidence": "visual-review",
+      "appId": "1232780281",
+      "appName": "Notion: Notes, Tasks, AI",
+      "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-1232780281-2",
+      "title": "Grouped page links",
+      "category": "Productivity",
+      "screenId": "789196ecc75da0b657c3659a6f6e88e3f55ce17880d6102858cf13a6d49f1c01",
+      "description": "Headings divide a workspace into groups of page links with small icons.",
+      "tags": [
+        "hierarchy",
+        "list",
+        "navigation"
+      ],
+      "evidence": "visual-review",
+      "appId": "1232780281",
+      "appName": "Notion: Notes, Tasks, AI",
+      "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
+      "reviewedAt": "2026-09-19"
+    },
+    {
+      "id": "element-1232780281-3",
+      "title": "Database list toolbar",
+      "category": "Productivity",
+      "screenId": "b17fd428aa647543e5b2a7eb9bec694d8a456d3fb8f89e844836f018f45e5c7f",
+      "description": "A list of trips includes search, filter, and add controls beneath the page header.",
+      "tags": [
+        "toolbar",
+        "list",
+        "filter",
+        "database"
+      ],
+      "evidence": "visual-review",
+      "appId": "1232780281",
+      "appName": "Notion: Notes, Tasks, AI",
+      "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
+      "reviewedAt": "2026-09-19"
+    }
+  ]
+}
