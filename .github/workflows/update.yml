@@ -63,14 +63,11 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
-          import urllib.request
+          import subprocess
 
           base = "https://catalog.patchworkmd.dev/"
-          with urllib.request.urlopen(base + "data.json", timeout=20) as response:
-              data = json.load(response)
+          data = json.loads(subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", base + "data.json"]))
           path = data["screens"][0]["path"]
-          with urllib.request.urlopen(base + path, timeout=20) as response:
-              if response.status != 200:
-                  raise RuntimeError(f"media check returned {response.status}")
+          subprocess.run(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", "--output", "/dev/null", base + path], check=True)
           print("production catalog and representative media OK")
           PY
