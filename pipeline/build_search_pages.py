@@ -55,7 +55,7 @@ def build(root=ROOT):
         full = s.get('fullSizeUrl') or sources.get(s['id'], '')
         if not re.fullmatch(r'https://is[0-9]+-ssl\.mzstatic\.com/image/thumb/[^?#]+/1290x2796bb\.png', full):
             full = '/' + s['path']
-        return f'<a href="{esc(full)}"><img src="{esc(full)}" alt="{esc(s.get("title","App"))} App Store screenshot" loading="lazy" onerror="this.onerror=null;this.src=&#39;/{esc(s["path"])}&#39;"></a>'
+        return f'<a href="{esc(full)}"><img src="{esc(full)}" alt="{esc(s.get("title","App"))} App Store screenshot" loading="lazy" onerror="this.onerror=null;this.src=&#39;/{esc(s["path"])}&#39;;this.parentElement.href=this.src"></a>'
     entries = []
     for app in data['apps']:
         app_id = str(app['id'])
