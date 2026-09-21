@@ -89,9 +89,12 @@ function render() {
 function view(id) {
   const s = data.screens.find(x => x.id === id); if (!s) return;
   $('#viewerTitle').textContent = s.title || 'Screen reference';
-  $('#viewerContent').innerHTML = `<div class="detail">${media(s)}<p>${sourceLink(s.sourceUrl)}</p><p class="meta">${esc(s.category || 'App Store')} · Developer-published listing screenshot</p></div>`;
+  $('#viewerContent').innerHTML = `<div class="detail"><figure class="detail-shot">${media(s)}<figcaption>${esc(s.title || 'Screenshot')} · ${esc(s.category || 'App Store')} · Developer-published listing screenshot</figcaption></figure><p>${sourceLink(s.sourceUrl)}</p></div>`;
   $('#viewerContent img')?.classList.add('detailmedia');
   if (!$('#viewer').open) $('#viewer').showModal();
+}
+function appDetailCard(s, index) {
+  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'app')} screenshot ${index + 1}">${media({...s,title:`${s.title || 'App'} screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
 }
 function viewCollection(id, kind) {
   const item = (data[kind] || []).find(x => x.id === id); if (!item) return;
@@ -134,7 +137,7 @@ document.addEventListener('click', e => {
     const x = data.apps.find(x => x.id === b.dataset.related); if (!x) return;
     const related = data.screens.filter(s => (x.assetIds || []).includes(s.id));
     $('#viewerTitle').textContent = x.name;
-    $('#viewerContent').innerHTML = `<p>${sourceLink(x.url)}</p><p class="coverage">${esc(x.category)} · ${related.length} listing screenshots${Number.isFinite(x.rating) ? ` · ${x.rating.toFixed(1)} / 5 App Store rating` : ''}</p><div class="grid">${related.map(screenCard).join('')}</div>`;
+    $('#viewerContent').innerHTML = `<div class="app-detail-summary"><p>${sourceLink(x.url)} · <a href="/apps/${encodeURIComponent(x.id)}/">Open reference page ↗</a></p><p class="coverage">${esc(x.category)} · ${related.length} listing screenshots${Number.isFinite(x.rating) ? ` · ${x.rating.toFixed(1)} / 5 App Store rating` : ''}</p></div><div class="app-gallery">${related.map(appDetailCard).join('')}</div>`;
     if (!$('#viewer').open) $('#viewer').showModal();
   }
 });

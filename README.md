@@ -137,3 +137,11 @@ Review source images before adding tags. Keep the source URL and review date.
 
 The initial library includes 7 collections and 25 UI elements from 7 apps.
 These are manual visual annotations, not Jev classification output.
+
+## Search reference pages
+
+Run `python3 pipeline/build_search_pages.py` after refreshing the catalog. CI
+runs it before each deploy. It builds HTML app references, an app directory,
+reviewed-pattern and collection pages, source FAQs, sitemap.xml, robots.txt,
+and llms.txt from the current snapshot. Generated pages are not committed.
+The interactive hash routes remain available; crawlable pages use stable paths.

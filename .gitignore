@@ -3,3 +3,12 @@ __pycache__/
 .DS_Store
 site/assets/
 research/
+
+# Built from the current snapshot before deployment
+site/apps/
+site/ui-elements/
+site/flows/
+site/about/
+site/sitemap.xml
+site/robots.txt
+site/llms.txt
