@@ -36,6 +36,43 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result["coverage"]["chartStore"], "us")
         self.assertEqual(result["coverage"]["chartType"], "topfreeapplications")
 
+    def test_empty_category_aborts_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, "Empty chart"):
+                fetch.build()
+
+    def test_refresh_keeps_all_ten_listing_screens(self):
+        details = [{"trackId": "a", "trackName": "App", "screenshotUrls": [str(i) for i in range(10)]}]
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", return_value=["a"]), \
+             patch.object(fetch, "lookup_apps", return_value=details), \
+             patch.object(fetch, "save_screenshot", side_effect=lambda url: {"id": url, "path": f"assets/{url}.png"}), \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+        self.assertEqual(len(result['apps'][0]['assetIds']), 10)
+        self.assertEqual(result['coverage']['categoryCoverage'][0]['chartEntries'], 1)
+        self.assertEqual(result['coverage']['chartLimit'], 100)
+
+    def test_refresh_uploads_only_media_not_in_the_published_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ['old.png','new.png']:
+                (root / name).write_bytes(b'image')
+            data = {'apps': [], 'screens': [{'path':'assets/old.png'}, {'path':'assets/new.png'}]}
+            previous = {'apps': [], 'screens': [{'path':'assets/old.png'}]}
+            with patch.object(fetch, 'ASSETS_DIR', root), \
+                 patch.dict(fetch.os.environ, {'CATALOG_R2_UPLOAD':'1'}), \
+                 patch.object(fetch.subprocess, 'run') as run:
+                run.return_value.returncode = 0
+                fetch.upload_new_assets(data, previous)
+            self.assertEqual(run.call_count, 1)
+            self.assertIn('open-app-catalog-assets/assets/new.png', run.call_args.args[0])
+
     def test_upload_error_does_not_replace_dataset(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

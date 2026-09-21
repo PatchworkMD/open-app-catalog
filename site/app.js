@@ -2,7 +2,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
-let viewerState = null;
+let viewerState = null, curationState = 'loading';
 let data, limit = 48, selected = new Set(), board = [], storageWarning = '';
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
@@ -73,7 +73,7 @@ function fillHero() {
   const shots = [...data.apps].sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999)).map(a => data.screens.find(s => (a.assetIds || []).includes(s.id))).filter(Boolean);
   nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]).replace('loading="eager"', 'loading="eager"'); });
   const copy = $('#hero p');
-  if (copy) copy.textContent = `${data.apps.length.toLocaleString()} apps. ${data.screens.length.toLocaleString()} screenshots. Explore references from Apple's public listings.`;
+  if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${data.screens.length.toLocaleString()} listing screenshots to explore.`;
 }
 function render() {
   if (!data) return;
@@ -86,6 +86,13 @@ function render() {
   $('#coverage').textContent = `${data.apps.length.toLocaleString()} apps · ${data.screens.length.toLocaleString()} screenshots · Snapshot ${Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString()} · US App Store`;
   $('#compareCount').textContent = selected.size;
   if (informational) { $('#content').className = ''; $('#content').innerHTML = r === 'plugin' ? pluginDocs() : docs(); $('#status').textContent = ''; $('#more').hidden = true; return; }
+  if (['flows','elements'].includes(r) && curationState !== 'ready') {
+    $('#content').className = 'grid'; $('#more').hidden = true; $('#export').disabled = true;
+    $('#status').textContent = curationState === 'loading' ? 'Loading reviewed references…' : 'Reviewed references unavailable';
+    $('#content').innerHTML = curationState === 'loading' ? '<p role="status">Loading reviewed references…</p>' : '<div class="empty"><h3>These references could not load.</h3><p>The app catalog is still available. Try loading the reviewed library again.</p><button data-retry-curation>Try again</button></div>';
+    return;
+  }
+  $('#export').disabled = false;
   const items = currentItems();
   $('#status').textContent = `${items.length.toLocaleString()} results${r === 'boards' ? ' · saved on this device' : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
   $('#more').hidden = items.length <= limit;
@@ -117,14 +124,12 @@ function viewCollection(id, kind) {
   const item = (data[kind] || []).find(x => x.id === id); if (!item) return;
   const ids = kind === 'flows' ? item.assetIds : [item.screenId];
   const shots = ids.map(x => data.screens.find(s => s.id === x)).filter(Boolean);
-  if (kind === 'elements') { openScreens(shots, 0, item.title, `${item.description || 'Reviewed interface pattern'} · Reviewed ${item.reviewedAt || 'date unavailable'}`); return; }
-  viewerState = null; $('#viewer').classList.remove('screen-viewer');
-  $('#viewerTitle').textContent = item.title;
-  const note = kind === 'flows' ? '<p class="coverage"><strong>Listing collection · interaction order unverified.</strong> Screenshots are shown in the curator\'s order.</p>' : `<p class="coverage"><strong>${esc(item.title)}</strong> · ${esc(item.description || 'Curated interface pattern')} · visual review annotation</p>`;
-  $('#viewerContent').innerHTML = `${note}<p>${sourceLink(item.sourceUrl || shots[0]?.sourceUrl)}</p><div class="collection-detail">${shots.map((s, i) => `<figure><button class="screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')} ${i + 1}">${media(s)}</button><figcaption>${i + 1}. ${esc(s.title || 'Listing screenshot')}</figcaption><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></figure>`).join('')}</div>`;
-  syncActions();
-  if (!$('#viewer').open) $('#viewer').showModal();
+  const context = kind === 'flows'
+    ? "Listing collection · interaction order unverified. Shown in the curator's order."
+    : `${item.description || 'Reviewed interface pattern'} · Reviewed ${item.reviewedAt || 'date unavailable'}`;
+  openScreens(shots, 0, item.title, context);
 }
+
 function syncActions() {
   document.querySelectorAll('[data-save],[data-select]').forEach(b => {
     const save = Boolean(b.dataset.save), on = save ? board.includes(b.dataset.save) : selected.has(b.dataset.select);
@@ -138,7 +143,8 @@ function download(value,name) {
   const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u),1000);
 }
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-save],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb]'); if (!b || !data) return;
+  const b = e.target.closest('[data-save],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb],[data-retry-curation]'); if (!b || !data) return;
+  if (b.hasAttribute('data-retry-curation')) { loadCuration(); return; }
   if (b.hasAttribute('data-step') || b.hasAttribute('data-thumb')) {
     if (!viewerState) return;
     const index = b.hasAttribute('data-thumb') ? Number(b.dataset.thumb) : viewerState.index + Number(b.dataset.step);
@@ -205,13 +211,25 @@ fetch('data.json').then(r => { if (!r.ok) throw Error('Catalog unavailable'); re
   const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
   fillHero(); render(); $('#export').disabled = false;
-  fetch('curation.json').then(r => r.ok ? r.json() : null).catch(() => null).then(curation => {
-    mergeCuration(curation);
-    const mergedCats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
-    $('#category').innerHTML = '<option value="">All categories</option>' + mergedCats.map(c => `<option>${esc(c)}</option>`).join('');
-    render();
-  });
+  loadCuration();
 }).catch(() => {
   $('#hero').hidden = true; $('#coverage').textContent = 'The catalog could not load.';
   $('#content').innerHTML = '<div class="empty"><h3>We could not load the library.</h3><p>Your saved board remains on this device.</p><button onclick="location.reload()">Try again</button></div>';
 });
+
+async function loadCuration() {
+  curationState = 'loading'; render();
+  try {
+    const response = await fetch('curation.json');
+    if (!response.ok) throw Error('Reviewed library unavailable');
+    const curation = await response.json();
+    if (!curation || !Array.isArray(curation.flows) || !Array.isArray(curation.elements)) throw Error('Invalid reviewed library');
+    mergeCuration(curation);
+    const category = $('#category').value;
+    const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+    $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
+    $('#category').value = category;
+    curationState = 'ready'; fillHero();
+  } catch { curationState = 'error'; }
+  render();
+}

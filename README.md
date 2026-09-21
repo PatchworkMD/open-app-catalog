@@ -145,3 +145,13 @@ runs it before each deploy. It builds HTML app references, an app directory,
 reviewed-pattern and collection pages, source FAQs, sitemap.xml, robots.txt,
 and llms.txt from the current snapshot. Generated pages are not committed.
 The interactive hash routes remain available; crawlable pages use stable paths.
+
+## Automatic additions and refreshes
+
+The existing GitHub Actions **Update catalog** workflow runs daily (scheduled for 06:17 UTC; GitHub may start it later). It pulls up to 100 free-chart entries for each of the eight categories in `pipeline/fetch.py` → `GENRES`. An app newly entering a tracked chart is added on the next successful refresh. Apps leaving those charts leave the current chart catalog. This is a US free-app chart catalog, not a revenue ranking.
+
+The importer retains up to ten available iPhone listing screenshots per app, records actual per-category feed counts and added/removed app IDs in `coverage`, uploads only media hashes absent from the previous published snapshot to R2, and only then replaces the snapshot. Empty chart or metadata responses abort the refresh. Reviewed element/collection images are pinned in `site/curation.json`, so changing App Store images does not silently erase that research.
+
+To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
+
+Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. Accounts, cloud board sync, and shared boards are not implemented in the current static catalog.
