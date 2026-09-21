@@ -37,3 +37,28 @@ class SearchPagesTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build(root)
             self.assertEqual((root / 'sitemap.xml').read_text(), 'previous snapshot')
+
+    def test_reviewed_screens_survive_a_snapshot_that_drops_their_hashes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sid = 'b' * 64
+            other_sid = 'c' * 64
+            data = {'coverage': {'generatedAt': '2026-09-21T10:00:00Z'}, 'apps': [
+                {'id': '456', 'name': 'Reviewed app', 'category': 'Utilities', 'assetIds': [sid], 'url': 'https://apps.apple.com/us/app/example/id456'}
+            ], 'screens': [{'id': other_sid, 'title': 'Other app', 'path': f'assets/{other_sid}.jpg'}]}
+            reviewed = {'id': sid, 'title': 'Reviewed app', 'category': 'Utilities', 'kind': 'image',
+                        'path': f'assets/{sid}.jpg', 'sourceUrl': 'https://apps.apple.com/us/app/example/id456',
+                        'reviewedAt': '2026-09-19', 'source': 'site/data.json'}
+            curation = {'screens': [reviewed], 'elements': [
+                {'screenId': sid, 'title': 'Reviewed pattern', 'description': 'Pattern evidence.'}
+            ], 'flows': []}
+            (root / 'data.json').write_text(json.dumps(data))
+            (root / 'curation.json').write_text(json.dumps(curation))
+
+            build(root)
+
+            app_page = (root / 'apps/456/index.html').read_text()
+            element_page = (root / 'ui-elements/index.html').read_text()
+            self.assertIn(f'href="/{reviewed["path"]}"', app_page)
+            self.assertIn('Reviewed pattern', element_page)
+            self.assertIn(f'src="/{reviewed["path"]}"', element_page)

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 (async () => {
   const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
   const page = await browser.newPage();
+  if (process.env.CATALOG_SNAPSHOT) await page.route('**/data.json', route => route.fulfill({contentType:'application/json',body:require('node:fs').readFileSync(process.env.CATALOG_SNAPSHOT,'utf8')}));
   const base = process.env.CATALOG_TEST_URL || 'http://127.0.0.1:8765/';
   try {
     await page.goto(base + '#flows');
@@ -16,8 +17,15 @@ const assert = require('node:assert/strict');
     assert.equal(await page.locator('#viewerContent [data-save]').first().getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
     await page.getByRole('link', {name:'UI elements', exact:true}).click();
-    await page.locator('.collection-card').first().waitFor();
+    await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
     assert.equal(await page.locator('.collection-card').count(), 25);
+    assert.equal(await page.locator('#viewer').isVisible(), false);
+    await page.screenshot({path:'/tmp/hugging-elements-fixed.png',animations:'disabled'});
+    await page.locator('.collection-card').first().getByRole('button', {name:/Open/}).click();
+    assert.equal(await page.locator('.screen-canvas img').count(), 1);
+    assert.match(await page.locator('.screen-context').textContent(), /Reviewed/);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#viewer').isVisible(), false);
     await page.locator('#search').fill('tab bar');
     assert((await page.locator('.collection-card').count()) > 0);
     const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);

@@ -56,7 +56,7 @@ const path = require('node:path');
     await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({path:path.join(evidence,'mobile.png')});
-    await page.goto(base + '#plugin'); await page.locator('.doc h2').waitFor();
+    await page.goto(base + '#plugin'); await page.locator('#content .doc h2').waitFor();
     await page.screenshot({path:path.join(evidence,'plugin.png')});
     const blocked = await browser.newPage();
     await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));

@@ -18,6 +18,18 @@ def apple_url(value):
 def image_path(value):
     return value if re.fullmatch(r'assets/[a-f0-9]{64}\.[a-z0-9]{2,4}', value or '') else ''
 
+def curated_screen(record):
+    if not isinstance(record, dict):
+        return False
+    screen_id = record.get('id', '')
+    path = image_path(record.get('path'))
+    return bool(
+        re.fullmatch(r'[a-f0-9]{64}', screen_id)
+        and path
+        and path.rsplit('/', 1)[-1].rsplit('.', 1)[0] == screen_id
+        and apple_url(record.get('sourceUrl'))
+    )
+
 def document(title, description, path, body, modified):
     schema = {'@context':'https://schema.org','@type':'CollectionPage','name':title,'description':description,'url':BASE+path,'dateModified':modified,'isPartOf':{'@type':'WebSite','name':'Hugging App','url':BASE+'/'}}
     encoded = json.dumps(schema, ensure_ascii=False).replace('<', '\\u003c')
@@ -32,9 +44,11 @@ def build(root=ROOT):
     data = json.loads((root/'data.json').read_text())
     if not data.get('apps') or not data.get('screens'):
         raise ValueError('Refusing to generate an empty reference library')
-    screens = {s['id']:s for s in data['screens'] if image_path(s.get('path'))}
     modified = data.get('coverage',{}).get('generatedAt','')[:10]
     curation = json.loads((root/'curation.json').read_text()) if (root/'curation.json').exists() else {}
+    screens = {s['id']:s for s in data['screens'] if image_path(s.get('path'))}
+    curated = {s['id']:s for s in curation.get('screens',[]) if curated_screen(s)}
+    screens.update(curated)
     pages = {}
     def shot(s):
         return f'<a href="/{esc(s["path"])}"><img src="/{esc(s["path"])}" alt="{esc(s.get("title","App"))} App Store screenshot" loading="lazy"></a>'

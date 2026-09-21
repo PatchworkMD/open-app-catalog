@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
+let viewerState = null;
 let data, limit = 48, selected = new Set(), board = [], storageWarning = '';
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
@@ -42,6 +43,12 @@ function filtered(items) {
 function currentItems() { return filtered(route() === 'boards' ? data.screens.filter(s => board.includes(s.id)) : data[route()] || []); }
 function mergeCuration(curation) {
   if (!curation || typeof curation !== 'object') return;
+  const knownScreens = new Set(data.screens.map(s => s.id));
+  for (const s of Array.isArray(curation.screens) ? curation.screens : []) {
+    if (s && /^[a-f0-9]{64}$/.test(s.id || '') && new RegExp('^assets/' + s.id + '\\.[a-z0-9]+$', 'i').test(s.path || '') && /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(s.sourceUrl || '') && !knownScreens.has(s.id)) {
+      data.screens.push(s); knownScreens.add(s.id);
+    }
+  }
   const flows = (Array.isArray(curation.flows) ? curation.flows : []).map(x => {
     if (!x || typeof x !== 'object') return null;
     const assetIds = screenIds(x.assetIds);
@@ -82,24 +89,36 @@ function render() {
   const items = currentItems();
   $('#status').textContent = `${items.length.toLocaleString()} results${r === 'boards' ? ' · saved on this device' : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
   $('#more').hidden = items.length <= limit;
-  $('#content').className = 'grid';
+  $('#content').className = ['elements','flows'].includes(r) ? 'grid curated-grid' : 'grid';
   const empty = r === 'boards' ? '<h3>Your board is empty.</h3><p>Save screenshots from the Screens library, then export a board for your research.</p><a href="#screens">Explore screens ↗</a>' : ['flows','elements'].includes(r) ? `<h3>No ${esc(routes[r].toLowerCase())} in this dataset</h3><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h3>No matching results</h3><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
   $('#content').innerHTML = items.length ? items.slice(0,limit).map(x => r === 'apps' ? appCard(x) : ['flows','elements'].includes(r) ? curationCard(x, r) : screenCard(x)).join('') : `<div class="empty">${empty}</div>`;
 }
-function view(id) {
-  const s = data.screens.find(x => x.id === id); if (!s) return;
-  $('#viewerTitle').textContent = s.title || 'Screen reference';
-  $('#viewerContent').innerHTML = `<div class="detail"><figure class="detail-shot">${media(s)}<figcaption>${esc(s.title || 'Screenshot')} · ${esc(s.category || 'App Store')} · Developer-published listing screenshot</figcaption></figure><p>${sourceLink(s.sourceUrl)}</p></div>`;
-  $('#viewerContent img')?.classList.add('detailmedia');
+function openScreens(shots, index, title, context = '') {
+  if (!shots.length) return;
+  viewerState = {shots, index, title, context};
+  $('#viewer').classList.add('screen-viewer');
+  renderScreen();
   if (!$('#viewer').open) $('#viewer').showModal();
 }
-function appDetailCard(s, index) {
-  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'app')} screenshot ${index + 1}">${media({...s,title:`${s.title || 'App'} screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
+function renderScreen() {
+  const {shots, index, title, context} = viewerState, s = shots[index];
+  $('#viewerTitle').textContent = title;
+  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
+  $('#viewerContent').scrollTop = 0;
+  $('.screen-thumbnails [aria-current="true"]')?.scrollIntoView({block:'nearest',inline:'nearest'});
+}
+function view(id) {
+  const screen = data.screens.find(s => s.id === id); if (!screen) return;
+  const app = data.apps.find(a => (a.assetIds || []).includes(id));
+  const shots = app ? app.assetIds.map(id => data.screens.find(s => s.id === id)).filter(Boolean) : [screen];
+  openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot');
 }
 function viewCollection(id, kind) {
   const item = (data[kind] || []).find(x => x.id === id); if (!item) return;
   const ids = kind === 'flows' ? item.assetIds : [item.screenId];
   const shots = ids.map(x => data.screens.find(s => s.id === x)).filter(Boolean);
+  if (kind === 'elements') { openScreens(shots, 0, item.title, `${item.description || 'Reviewed interface pattern'} · Reviewed ${item.reviewedAt || 'date unavailable'}`); return; }
+  viewerState = null; $('#viewer').classList.remove('screen-viewer');
   $('#viewerTitle').textContent = item.title;
   const note = kind === 'flows' ? '<p class="coverage"><strong>Listing collection · interaction order unverified.</strong> Screenshots are shown in the curator\'s order.</p>' : `<p class="coverage"><strong>${esc(item.title)}</strong> · ${esc(item.description || 'Curated interface pattern')} · visual review annotation</p>`;
   $('#viewerContent').innerHTML = `${note}<p>${sourceLink(item.sourceUrl || shots[0]?.sourceUrl)}</p><div class="collection-detail">${shots.map((s, i) => `<figure><button class="screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')} ${i + 1}">${media(s)}</button><figcaption>${i + 1}. ${esc(s.title || 'Listing screenshot')}</figcaption><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></figure>`).join('')}</div>`;
@@ -119,8 +138,15 @@ function download(value,name) {
   const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u),1000);
 }
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-save],[data-select],[data-view],[data-related],[data-collection],[data-reset]'); if (!b || !data) return;
-  if (b.hasAttribute('data-reset')) { $('#search').value = ''; $('#category').value = ''; limit = 48; render(); }
+  const b = e.target.closest('[data-save],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb]'); if (!b || !data) return;
+  if (b.hasAttribute('data-step') || b.hasAttribute('data-thumb')) {
+    if (!viewerState) return;
+    const index = b.hasAttribute('data-thumb') ? Number(b.dataset.thumb) : viewerState.index + Number(b.dataset.step);
+    if (index < 0 || index >= viewerState.shots.length) return;
+    viewerState.index = index; renderScreen();
+    const target = b.hasAttribute('data-thumb') ? `[data-thumb="${index}"]` : `[data-step="${b.dataset.step}"]`;
+    const next = $(target); (next && !next.disabled ? next : $('.screen-thumbnails [aria-current="true"]'))?.focus({preventScroll:true});
+  } else if (b.hasAttribute('data-reset')) { $('#search').value = ''; $('#category').value = ''; limit = 48; render(); }
   else if (b.dataset.save) {
     const id = b.dataset.save; board = board.includes(id) ? board.filter(x => x !== id) : [...board,id];
     try { localStorage.setItem('oac-board',JSON.stringify(board)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
@@ -135,24 +161,36 @@ document.addEventListener('click', e => {
   else if (b.dataset.collection) viewCollection(b.dataset.collection, b.dataset.collectionKind);
   else {
     const x = data.apps.find(x => x.id === b.dataset.related); if (!x) return;
-    const related = data.screens.filter(s => (x.assetIds || []).includes(s.id));
-    $('#viewerTitle').textContent = x.name;
-    $('#viewerContent').innerHTML = `<div class="app-detail-summary"><p>${sourceLink(x.url)} · <a href="/apps/${encodeURIComponent(x.id)}/">Open reference page ↗</a></p><p class="coverage">${esc(x.category)} · ${related.length} listing screenshots${Number.isFinite(x.rating) ? ` · ${x.rating.toFixed(1)} / 5 App Store rating` : ''}</p></div><div class="app-gallery">${related.map(appDetailCard).join('')}</div>`;
-    if (!$('#viewer').open) $('#viewer').showModal();
+    const related = (x.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
+    if (related.length) openScreens(related, 0, x.name, `${x.category} · App Store listing screenshots`);
+    else {
+      viewerState = null; $('#viewer').classList.remove('screen-viewer');
+      $('#viewerTitle').textContent = x.name;
+      $('#viewerContent').innerHTML = `<p>No screenshots available for this app.</p>${sourceLink(x.url)}`;
+      if (!$('#viewer').open) $('#viewer').showModal();
+    }
   }
 });
 $('#compare').onclick = () => {
   if (!data) return;
   if (selected.size < 2) { $('#status').textContent = 'Select at least two screens to compare'; return; }
+  viewerState = null; $('#viewer').classList.remove('screen-viewer');
   $('#viewerTitle').textContent = 'Compare references';
   $('#viewerContent').innerHTML = `<div class="comparegrid">${data.screens.filter(s => selected.has(s.id)).map(screenCard).join('')}</div>`;
   if (!$('#viewer').open) $('#viewer').showModal();
 };
+document.addEventListener('keydown', e => {
+  if (!$('#viewer').open || !viewerState || e.altKey || e.ctrlKey || e.metaKey || !['ArrowLeft','ArrowRight'].includes(e.key) || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  e.preventDefault();
+  const index = viewerState.index + (e.key === 'ArrowRight' ? 1 : -1);
+  if (index >= 0 && index < viewerState.shots.length) { viewerState.index = index; renderScreen(); $('.screen-thumbnails [aria-current="true"]')?.focus({preventScroll:true}); }
+});
+$('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').classList.remove('screen-viewer'); });
 $('#close').onclick = () => $('#viewer').close();
 $('#viewer').addEventListener('click', e => { if (e.target === $('#viewer')) $('#viewer').close(); });
 $('#more').onclick = () => { limit += 48; render(); };
 ['search','category','kind','sort'].forEach(id => $('#' + id).addEventListener('input', () => { limit = 48; render(); }));
-window.addEventListener('hashchange', () => { limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); });
+window.addEventListener('hashchange', () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); });
 $('#export').onclick = () => {
   if (!data || ['agents','plugin'].includes(route())) return;
   const items = currentItems();
