@@ -2,14 +2,16 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
-let viewerState = null, curationState = 'loading';
+let viewerState = null, curationState = 'loading', resolutionMap = {};
 let data, limit = 48, selected = new Set(), board = [], storageWarning = '';
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
 const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
-function media(s) {
+function media(s, fullSize = false) {
+  const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
+  const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img src="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}" onload="this.classList.add('loaded')" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'media-unavailable',textContent:'Image unavailable'}))">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}" onload="this.classList.add('loaded')" onerror="if(this.dataset.preview){this.removeAttribute('srcset');this.src=this.dataset.preview;delete this.dataset.preview;}else this.replaceWith(Object.assign(document.createElement('span'),{className:'media-unavailable',textContent:'Image unavailable'}))">` : '<span>Media unavailable</span>';
 }
 function appIcon(x) {
   const p = String(x.iconPath || '');
@@ -110,7 +112,7 @@ function openScreens(shots, index, title, context = '') {
 function renderScreen() {
   const {shots, index, title, context} = viewerState, s = shots[index];
   $('#viewerTitle').textContent = title;
-  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
+  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
   $('#viewerContent').scrollTop = 0;
   $('.screen-thumbnails [aria-current="true"]')?.scrollIntoView({block:'nearest',inline:'nearest'});
 }
@@ -205,7 +207,8 @@ $('#export').onclick = () => {
 $('#export').disabled = true;
 $('#content').className = 'grid';
 $('#content').innerHTML = Array(12).fill('<div class="skel" aria-hidden="true"></div>').join('');
-fetch('data.json').then(r => { if (!r.ok) throw Error('Catalog unavailable'); return r.json(); }).then(d => {
+Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch(() => ({})), fetch('data.json').then(r => { if (!r.ok) throw Error('Catalog unavailable'); return r.json(); })]).then(([sources, d]) => {
+  resolutionMap = sources && typeof sources === 'object' && !Array.isArray(sources) ? sources : {};
   data = d;
   for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
   const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();

@@ -13,6 +13,15 @@ SPEC.loader.exec_module(fetch)
 
 
 class BuildTest(unittest.TestCase):
+    def test_screenshot_keeps_stable_id_and_adds_full_resolution_source(self):
+        saved = {"id": "stable", "path": "assets/stable.jpg"}
+        with patch.object(fetch, "save_image", return_value=saved.copy()):
+            result = fetch.save_screenshot("https://is1-ssl.mzstatic.com/image/thumb/Purple/a.png/320x480bb.jpg")
+        self.assertEqual(result["id"], "stable")
+        self.assertTrue(result["fullSizeUrl"].endswith("/a.png/1290x2796bb.png"))
+        with patch.object(fetch, "save_image", return_value=saved.copy()):
+            self.assertNotIn("fullSizeUrl", fetch.save_screenshot("https://example.com/image.jpg"))
+
     def test_overlapping_feeds_keep_original_category_rank(self):
         feeds = {"one": ["a", "b"], "two": ["b", "c", "d"]}
         details = {

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -126,7 +127,12 @@ def save_image(url: str) -> dict | None:
     return {"id": digest, "kind": "image", "path": f"assets/{digest}.{ext}"}
 
 
-save_screenshot = save_image
+def save_screenshot(url: str) -> dict | None:
+    saved = save_image(url)
+    if saved and re.match(r"^https://is[0-9]+-ssl\.mzstatic\.com/image/thumb/", url):
+        full = re.sub(r"/[^/]+$", "/1290x2796bb.png", url)
+        saved["fullSizeUrl"] = full
+    return saved
 
 
 def build() -> dict:

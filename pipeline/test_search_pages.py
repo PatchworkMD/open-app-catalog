@@ -62,3 +62,11 @@ class SearchPagesTest(unittest.TestCase):
             self.assertIn(f'href="/{reviewed["path"]}"', app_page)
             self.assertIn('Reviewed pattern', element_page)
             self.assertIn(f'src="/{reviewed["path"]}"', element_page)
+
+            full = 'https://is1-ssl.mzstatic.com/image/thumb/example/image.png/1290x2796bb.png'
+            (root / 'image-sources.json').write_text(json.dumps({sid: full}))
+            build(root)
+            self.assertIn(f'src="{full}"', (root / 'ui-elements/index.html').read_text())
+            (root / 'image-sources.json').write_text(json.dumps({sid: 'https://untrusted.example/image.png'}))
+            build(root)
+            self.assertNotIn('untrusted.example', (root / 'ui-elements/index.html').read_text())

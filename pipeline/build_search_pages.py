@@ -49,9 +49,13 @@ def build(root=ROOT):
     screens = {s['id']:s for s in data['screens'] if image_path(s.get('path'))}
     curated = {s['id']:s for s in curation.get('screens',[]) if curated_screen(s)}
     screens.update(curated)
+    sources = json.loads((root/"image-sources.json").read_text()) if (root/"image-sources.json").exists() else {}
     pages = {}
     def shot(s):
-        return f'<a href="/{esc(s["path"])}"><img src="/{esc(s["path"])}" alt="{esc(s.get("title","App"))} App Store screenshot" loading="lazy"></a>'
+        full = s.get('fullSizeUrl') or sources.get(s['id'], '')
+        if not re.fullmatch(r'https://is[0-9]+-ssl\.mzstatic\.com/image/thumb/[^?#]+/1290x2796bb\.png', full):
+            full = '/' + s['path']
+        return f'<a href="{esc(full)}"><img src="{esc(full)}" alt="{esc(s.get("title","App"))} App Store screenshot" loading="lazy" onerror="this.onerror=null;this.src=&#39;/{esc(s["path"])}&#39;"></a>'
     entries = []
     for app in data['apps']:
         app_id = str(app['id'])

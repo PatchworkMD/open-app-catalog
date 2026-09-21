@@ -5,7 +5,7 @@ directly from Apple's free public APIs — no third-party dataset is scraped,
 copied, or redistributed.
 
 **Live site:** [catalog.patchworkmd.dev](https://catalog.patchworkmd.dev/).
-Cloudflare Worker `open-app-catalog` serves the site; R2 serves its media.
+Cloudflare Worker `open-app-catalog` serves the site; R2 serves cached previews and icons. Sharp screenshot variants are loaded from Apple’s image CDN.
 
 ## Why this exists
 
@@ -155,3 +155,7 @@ The importer retains up to ten available iPhone listing screenshots per app, rec
 To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
 
 Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. Accounts, cloud board sync, and shared boards are not implemented in the current static catalog.
+
+### Screenshot resolution
+
+The viewer requests Apple’s 1290 × 2796 bounding-box variant, while Retina grids request a smaller 640 × 1386 variant. Apple preserves each source image’s proportions and available resolution. Cached R2 previews remain the fallback. New imports retain `fullSizeUrl`; `site/image-sources.json` maps verified historical screenshot hashes to the same Apple source asset without changing saved reference IDs.
