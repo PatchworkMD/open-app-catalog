@@ -72,13 +72,14 @@ jobs:
           import json
           import subprocess
 
-          base = "https://catalog.patchworkmd.dev/"
-          data = json.loads(subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", base + "data.json"]))
+          origin = "https://open-app-catalog.austinwise-ev1e.workers.dev/"
+          public_base = "https://catalog.patchworkmd.dev/"
+          data = json.loads(subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", origin + "data.json"]))
           path = data["screens"][0]["path"]
-          subprocess.run(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", "--output", "/dev/null", base + path], check=True)
+          subprocess.run(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", "--output", "/dev/null", origin + path], check=True)
           reference = "apps/" + str(data["apps"][0]["id"]) + "/"
-          page = subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", base + reference]).decode()
-          if 'rel="canonical" href="' + base + reference + '"' not in page:
+          page = subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", origin + reference]).decode()
+          if 'rel="canonical" href="' + public_base + reference + '"' not in page:
               raise RuntimeError("Production reference page is missing its canonical URL")
-          print("production catalog, media, and crawlable reference page OK")
+          print("deployed Worker catalog and media, with public canonical reference page OK")
           PY
