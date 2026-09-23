@@ -8,7 +8,7 @@ const path = require('node:path');
   const browser = await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
   const page = await browser.newPage({viewport:{width:1440,height:1000}});
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  const base = process.env.CATALOG_TEST_URL || 'http://127.0.0.1:8765/';
+  const base = process.env.CATALOG_TEST_URL || 'http://127.0.0.1:8791/';
   const evidence = await fs.mkdtemp(path.join(os.tmpdir(),'hugging-app-qa-'));
   try {
     await page.goto(base + '#apps');

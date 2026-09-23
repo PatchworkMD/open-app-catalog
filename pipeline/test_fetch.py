@@ -55,15 +55,24 @@ class BuildTest(unittest.TestCase):
 
     def test_refresh_keeps_all_ten_listing_screens(self):
         details = [{"trackId": "a", "trackName": "App", "screenshotUrls": [str(i) for i in range(10)]}]
+
+        def saved_screenshot(url):
+            return {
+                "id": url,
+                "path": f"assets/{url}.png",
+                "fullSizeUrl": f"https://is1-ssl.mzstatic.com/image/thumb/Purple/{url}.png/1290x2796bb.png",
+            }
+
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
              patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
              patch.object(fetch, "fetch_chart_ids", return_value=["a"]), \
              patch.object(fetch, "lookup_apps", return_value=details), \
-             patch.object(fetch, "save_screenshot", side_effect=lambda url: {"id": url, "path": f"assets/{url}.png"}), \
+             patch.object(fetch, "save_screenshot", side_effect=saved_screenshot), \
              patch.object(fetch.time, "sleep"):
             result = fetch.build()
         self.assertEqual(len(result['apps'][0]['assetIds']), 10)
+        self.assertTrue(all(s['fullSizeUrl'].endswith('/1290x2796bb.png') for s in result['screens']))
         self.assertEqual(result['coverage']['categoryCoverage'][0]['chartEntries'], 1)
         self.assertEqual(result['coverage']['chartLimit'], 100)
 
