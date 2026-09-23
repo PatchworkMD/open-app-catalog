@@ -174,6 +174,7 @@ def build() -> dict:
                         "category": label,
                         "kind": "image",
                         "path": saved["path"],
+                        "fullSizeUrl": saved.get("fullSizeUrl"),
                         "sourceUrl": d.get("trackViewUrl"),
                     }
                 )
