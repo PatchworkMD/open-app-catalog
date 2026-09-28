@@ -1,0 +1,64 @@
+name: Verify catalog
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - "pipeline/**"
+      - "site/**"
+      - "tests/**"
+      - "worker/**"
+      - "firebase.json"
+      - "firestore.rules"
+      - "wrangler.jsonc"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - "pipeline/**"
+      - "site/**"
+      - "tests/**"
+      - "worker/**"
+      - "firebase.json"
+      - "firestore.rules"
+      - "wrangler.jsonc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-catalog-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test catalog pipeline
+        run: python3 -m unittest discover -s pipeline -p 'test_*.py'
+      - name: Test board model and browser flows
+        run: |
+          node tests/board-model.test.cjs
+          node tests/site.test.cjs
+      - name: Check JavaScript and Firebase configuration
+        run: |
+          node --check site/app.js
+          node --check site/board-model.js
+          node --input-type=module --check < site/account-sync.js
+          python3 -m json.tool .firebaserc > /dev/null
+          python3 -m json.tool firebase.json > /dev/null
+          python3 -m json.tool site/firebase-config.json > /dev/null
+      - name: Build Firebase client and dry-run Worker
+        run: |
+          npm install --no-save --no-package-lock firebase@12.19.0 esbuild@0.25.9 wrangler@4
+          npx esbuild site/firebase-client.entry.js --bundle --platform=browser --format=esm --outfile=/tmp/firebase-client.bundle.js
+          npx wrangler deploy --dry-run
