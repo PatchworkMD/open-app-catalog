@@ -58,6 +58,7 @@ jobs:
       - name: Test board model and browser flows
         env:
           PLAYWRIGHT_CHANNEL: chromium
+          QA_ARTIFACT_DIR: ${{ runner.temp }}/catalog-browser-qa
         run: |
           node tests/board-model.test.cjs
           node tests/site.test.cjs
@@ -73,3 +74,11 @@ jobs:
         run: |
           npx esbuild site/firebase-client.entry.js --bundle --platform=browser --format=esm --outfile=/tmp/firebase-client.bundle.js
           npx wrangler deploy --dry-run
+      - name: Upload browser QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-browser-qa
+          path: ${{ runner.temp }}/catalog-browser-qa/*.png
+          if-no-files-found: warn
+          retention-days: 7
