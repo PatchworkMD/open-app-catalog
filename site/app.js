@@ -3,7 +3,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
 let viewerState = null, curationState = 'loading', resolutionMap = {};
-let data, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
+let data, catalogScreenCount = 0, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
@@ -12,8 +12,29 @@ function media(s, fullSize = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
   const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}" onload="this.classList.add('loaded')" onerror="if(this.dataset.preview){this.removeAttribute('srcset');this.src=this.dataset.preview;delete this.dataset.preview;}else this.replaceWith(Object.assign(document.createElement('span'),{className:'media-unavailable',textContent:'Image unavailable'}))">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
+function handleMediaLoad(image) {
+  image.classList.add('loaded');
+}
+function handleMediaError(image) {
+  const preview = image.dataset.preview;
+  const source = image.currentSrc || image.getAttribute('src') || '';
+  const isAppleImage = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\//.test(source);
+  if (preview && isAppleImage && image.dataset.previewAttempted !== 'true') {
+    image.dataset.previewAttempted = 'true';
+    image.removeAttribute('srcset');
+    image.src = preview;
+    return;
+  }
+  image.replaceWith(Object.assign(document.createElement('span'), {className:'media-unavailable', textContent:'Image unavailable'}));
+}
+document.addEventListener('load', event => {
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) handleMediaLoad(event.target);
+}, true);
+document.addEventListener('error', event => {
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) handleMediaError(event.target);
+}, true);
 function appIcon(x) {
   const p = String(x.iconPath || '');
   return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" src="${esc(p)}" loading="eager" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">` : '<div class="icon-ph"></div>';
@@ -37,6 +58,9 @@ function appCard(x) {
   const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(x.chartRank) ? `<span class="pinrank">#${x.chartRank} in ${esc(x.category)}</span>` : '';
   return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(x.category || 'App Store')}</span></button></article>`;
 }
+function appDetailCard(s, index, appId) {
+  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
+}
 function matchesFilters(x) {
   const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
   return (!q || [x.name,x.title,x.category,x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || x.category === cat);
@@ -47,7 +71,11 @@ function filtered(items) {
   else if (data.coverage?.rankBasis === 'original-category-feed') out.sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999));
   return out;
 }
-function currentItems() { return filtered(route() === 'boards' ? data.screens.filter(s => board.includes(s.id)) : data[route()] || []); }
+function currentItems() {
+  const currentRoute = route();
+  const items = currentRoute === 'boards' ? data.screens.filter(s => board.includes(s.id)) : currentRoute === 'screens' ? data.screens.filter(s => !s.curatedOnly) : data[currentRoute] || [];
+  return filtered(items);
+}
 function currentBoardCollections() {
   return [
     ...(data.flows || []).map(record => ({kind:'flows',record})),
@@ -86,7 +114,7 @@ function fillHero() {
   const shots = [...data.apps].sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999)).map(a => data.screens.find(s => (a.assetIds || []).includes(s.id))).filter(Boolean);
   nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]).replace('loading="eager"', 'loading="eager"'); });
   const copy = $('#hero p');
-  if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${data.screens.length.toLocaleString()} listing screenshots to explore.`;
+  if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${catalogScreenCount.toLocaleString()} listing screenshots to explore.`;
 }
 function render() {
   if (!data) return;
@@ -96,7 +124,7 @@ function render() {
   $('#controls').hidden = informational; $('#export').hidden = informational;
   $('#kind').disabled = true;
   const built = new Date(data.coverage?.generatedAt);
-  $('#coverage').textContent = `${data.apps.length.toLocaleString()} apps · ${data.screens.length.toLocaleString()} screenshots · Snapshot ${Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString()} · US App Store`;
+  $('#coverage').textContent = `${data.apps.length.toLocaleString()} apps · ${catalogScreenCount.toLocaleString()} screenshots · Snapshot ${Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString()} · US App Store`;
   $('#compareCount').textContent = selected.size;
   if (informational) { $('#content').className = ''; $('#content').innerHTML = r === 'plugin' ? pluginDocs() : docs(); $('#status').textContent = ''; $('#more').hidden = true; return; }
   if (['flows','elements'].includes(r) && curationState !== 'ready') {
@@ -116,25 +144,45 @@ function render() {
   const cards = [...collectionCards,...screenCards];
   $('#content').innerHTML = cards.length ? cards.join('') : `<div class="empty">${empty}</div>`;
 }
-function openScreens(shots, index, title, context = '') {
+function openScreens(shots, index, title, context = '', returnAppId = null) {
   if (!shots.length) return;
-  viewerState = {shots, index, title, context};
+  viewerState = {shots, index, title, context, returnAppId};
   $('#viewer').classList.add('screen-viewer');
   renderScreen();
   if (!$('#viewer').open) $('#viewer').showModal();
 }
 function renderScreen() {
   const {shots, index, title, context} = viewerState, s = shots[index];
+  const returnApp = viewerState.returnAppId ? data.apps.find(app => app.id === viewerState.returnAppId) : null;
+  const back = returnApp ? `<button class="screen-back" data-back-app="${esc(returnApp.id)}">Back to app</button>` : '';
   $('#viewerTitle').textContent = title;
-  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
+  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span>${back}<div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
   $('#viewerContent').scrollTop = 0;
   $('.screen-thumbnails [aria-current="true"]')?.scrollIntoView({block:'nearest',inline:'nearest'});
 }
-function view(id) {
+function view(id, returnAppId = null) {
   const screen = data.screens.find(s => s.id === id); if (!screen) return;
   const app = data.apps.find(a => (a.assetIds || []).includes(id));
   const shots = app ? app.assetIds.map(id => data.screens.find(s => s.id === id)).filter(Boolean) : [screen];
-  openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot');
+  const context = app ? `${app.category || 'App Store'} · App Store listing screenshots` : '';
+  openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot', context, returnAppId);
+}
+function openApp(app, focusScreenId = null) {
+  const related = (app.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
+  viewerState = null;
+  $('#viewer').classList.remove('screen-viewer');
+  $('#viewerTitle').textContent = app.name;
+  const links = [sourceLink(app.url), `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>`].filter(Boolean).join(' · ');
+  const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
+  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(app.category || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
+  const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
+  $('#viewerContent').innerHTML = summary + gallery;
+  if (!$('#viewer').open) $('#viewer').showModal();
+  if (focusScreenId) requestAnimationFrame(() => {
+    const target = [...document.querySelectorAll('.app-detail-image')].find(button => button.dataset.view === focusScreenId);
+    target?.focus({preventScroll:true});
+    target?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+  });
 }
 function viewCollection(id, kind) {
   const item = (data[kind] || []).find(x => x.id === id); if (!item) return;
@@ -159,7 +207,7 @@ function download(value,name) {
   const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u),1000);
 }
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-save],[data-save-collection],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb],[data-retry-curation]'); if (!b || !data) return;
+  const b = e.target.closest('[data-save],[data-save-collection],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb],[data-retry-curation],[data-back-app]'); if (!b || !data) return;
   if (b.hasAttribute('data-retry-curation')) { loadCuration(); return; }
   if (b.hasAttribute('data-step') || b.hasAttribute('data-thumb')) {
     if (!viewerState) return;
@@ -186,18 +234,16 @@ document.addEventListener('click', e => {
     const id = b.dataset.select;
     if (selected.has(id)) selected.delete(id); else if (selected.size < 4) selected.add(id); else { $('#status').textContent = 'Compare up to four screens at a time'; return; }
     syncActions();
-  } else if (b.dataset.view) view(b.dataset.view);
+  } else if (b.dataset.view) view(b.dataset.view, b.dataset.returnApp || null);
+  else if (b.dataset.backApp) {
+    const app = data.apps.find(item => item.id === b.dataset.backApp);
+    const focusScreenId = viewerState?.shots[viewerState.index]?.id;
+    if (app) openApp(app, focusScreenId);
+  }
   else if (b.dataset.collection) viewCollection(b.dataset.collection, b.dataset.collectionKind);
   else {
     const x = data.apps.find(x => x.id === b.dataset.related); if (!x) return;
-    const related = (x.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
-    if (related.length) openScreens(related, 0, x.name, `${x.category} · App Store listing screenshots`);
-    else {
-      viewerState = null; $('#viewer').classList.remove('screen-viewer');
-      $('#viewerTitle').textContent = x.name;
-      $('#viewerContent').innerHTML = `<p>No screenshots available for this app.</p>${sourceLink(x.url)}`;
-      if (!$('#viewer').open) $('#viewer').showModal();
-    }
+    openApp(x);
   }
 });
 $('#compare').onclick = () => {
@@ -233,6 +279,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   resolutionMap = sources && typeof sources === 'object' && !Array.isArray(sources) ? sources : {};
   data = d;
   for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
+  catalogScreenCount = data.screens.length;
   const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
   fillHero(); render(); $('#export').disabled = false;
