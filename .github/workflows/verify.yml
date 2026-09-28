@@ -43,6 +43,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
       - name: Install browser and build dependencies
         run: |
           npm install --no-save --no-package-lock firebase@12.19.0 @firebase/rules-unit-testing@5.0.2 firebase-tools@15.31.0 esbuild@0.25.9 wrangler@4 playwright@1
