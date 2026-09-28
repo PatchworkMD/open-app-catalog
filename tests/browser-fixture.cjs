@@ -19,6 +19,7 @@ async function catalogBase(page) {
   const configured = process.env.CATALOG_TEST_URL;
   if (configured) return configured.endsWith('/') ? configured : `${configured}/`;
 
+  await page.route('https://is*-ssl.mzstatic.com/image/thumb/**/1290x2796bb.png', route => route.fulfill({status:200,body:previewFixture,contentType:'image/svg+xml'}));
   await page.route(`${localOrigin}/**`, async route => {
     try {
       const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
