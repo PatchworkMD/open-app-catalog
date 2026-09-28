@@ -43,9 +43,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install browser and build dependencies
+        run: |
+          npm install --no-save --no-package-lock firebase@12.19.0 esbuild@0.25.9 wrangler@4 playwright@1
+          npx playwright install --with-deps chromium
       - name: Test catalog pipeline
         run: python3 -m unittest discover -s pipeline -p 'test_*.py'
       - name: Test board model and browser flows
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
         run: |
           node tests/board-model.test.cjs
           node tests/site.test.cjs
@@ -59,6 +65,5 @@ jobs:
           python3 -m json.tool site/firebase-config.json > /dev/null
       - name: Build Firebase client and dry-run Worker
         run: |
-          npm install --no-save --no-package-lock firebase@12.19.0 esbuild@0.25.9 wrangler@4
           npx esbuild site/firebase-client.entry.js --bundle --platform=browser --format=esm --outfile=/tmp/firebase-client.bundle.js
           npx wrangler deploy --dry-run
