@@ -1,0 +1,106 @@
+// Owner setup: activate Firebase in the project Console, create a Web App,
+// enable Google and Email/Password sign-in, and create the Firestore database.
+// Copy that Web App's config into site/firebase-config.json, then set enabled=true.
+// Deploy these rules with `firebase deploy --only firestore:rules` after review.
+// Email/password users must verify their address before any board access.
+// Invite document IDs use the invited email so acceptance can match verified email.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.email is string;
+    }
+    function boardMember(boardId) {
+      return verified() && exists(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid));
+    }
+    function boardOwner(boardId) {
+      return boardMember(boardId)
+        && get(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid)).data.role == 'owner';
+    }
+    function validBoard(data) {
+      return data.keys().hasOnly(['ownerUid', 'localId', 'title', 'screenshotIds', 'collectionIds', 'createdAt', 'updatedAt'])
+        && data.ownerUid == request.auth.uid
+        && data.localId is string && data.localId.size() <= 180
+        && data.title is string && data.title.size() <= 120
+        && data.screenshotIds is list && data.screenshotIds.size() <= 5000
+        && data.collectionIds is list && data.collectionIds.size() <= 1000;
+    }
+    function onlySavedIdsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['screenshotIds', 'collectionIds', 'updatedAt'])
+        && request.resource.data.screenshotIds is list && request.resource.data.screenshotIds.size() <= 5000
+        && request.resource.data.collectionIds is list && request.resource.data.collectionIds.size() <= 1000
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    match /boards/{boardId} {
+      allow get: if boardMember(boardId);
+      allow list: if verified() && resource.data.ownerUid == request.auth.uid;
+      allow create: if verified() && validBoard(request.resource.data)
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if (boardOwner(boardId)
+          && validBoard(request.resource.data)
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.localId == resource.data.localId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time)
+        || (boardMember(boardId) && onlySavedIdsChanged());
+      allow delete: if boardOwner(boardId);
+
+      match /members/{uid} {
+        allow get, list: if verified() && (uid == request.auth.uid || boardOwner(boardId));
+        allow create: if verified()
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'status', 'createdAt'])
+          && request.resource.data.uid == uid && request.resource.data.email == request.auth.token.email.lower()
+          && request.resource.data.status == 'active' && request.resource.data.createdAt == request.time
+          && ((uid == request.auth.uid
+              && get(/databases/$(database)/documents/boards/$(boardId)).data.ownerUid == request.auth.uid
+              && request.resource.data.role == 'owner')
+            || (request.resource.data.role == 'member'
+              && get(/databases/$(database)/documents/boards/$(boardId)/invites/$(request.auth.token.email.lower())).data.status == 'accepted'
+              && get(/databases/$(database)/documents/boards/$(boardId)/invites/$(request.auth.token.email.lower())).data.acceptedBy == request.auth.uid));
+        allow update: if verified() && boardOwner(boardId)
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'status', 'createdAt'])
+          && request.resource.data.uid == uid && request.resource.data.role == 'member';
+        allow delete: if verified() && boardOwner(boardId) && uid != request.auth.uid;
+      }
+
+      match /invites/{inviteId} {
+          allow get, list: if verified() && (
+          boardOwner(boardId) || resource.data.invitedEmail == request.auth.token.email.lower()
+        );
+        allow create: if verified() && boardOwner(boardId)
+          && request.resource.data.keys().hasOnly(['invitedEmail', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.invitedEmail is string
+          && request.resource.data.invitedEmail.size() <= 254
+          && inviteId == request.resource.data.invitedEmail
+          && request.resource.data.invitedEmail.matches('^[^/@]+@[^/@]+$')
+          && request.resource.data.invitedEmail == request.resource.data.invitedEmail.lower()
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if verified() && (
+          (boardOwner(boardId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.resource.data.status in ['pending', 'revoked'])
+          || (resource.data.invitedEmail == request.auth.token.email.lower()
+            && resource.data.status == 'pending'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedBy', 'acceptedAt'])
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedBy == request.auth.uid
+            && request.resource.data.acceptedAt == request.time)
+        );
+        allow delete: if verified() && boardOwner(boardId);
+      }
+    }
+
+    match /{path=**}/members/{uid} {
+      allow get, list: if verified() && resource.data.uid == request.auth.uid;
+    }
+
+    match /{path=**}/invites/{inviteId} {
+      allow list: if verified() && resource.data.invitedEmail == request.auth.token.email.lower();
+    }
+  }
+}

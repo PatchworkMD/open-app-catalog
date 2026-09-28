@@ -48,12 +48,20 @@ jobs:
         run: |
           python3 -m unittest discover -s pipeline -p 'test_*.py'
           node --check site/app.js
+          node --check site/board-model.js
+          node --input-type=module --check < site/account-sync.js
+          node --test tests/board-model.test.cjs
+          python3 -m json.tool firebase.json >/dev/null
+          python3 -m json.tool site/firebase-config.json >/dev/null
 
       - name: Check Cloudflare credentials
         run: test -n "$CLOUDFLARE_API_TOKEN"
 
-      - name: Install Wrangler
-        run: npm install --no-save --no-package-lock wrangler@4
+      - name: Install deploy and Firebase build tools
+        run: npm install --no-save --no-package-lock wrangler@4 esbuild@0.28.2 firebase@12.19.0
+
+      - name: Build lazy Firebase client
+        run: npx esbuild site/firebase-client.entry.js --bundle --format=esm --target=es2022 --minify --legal-comments=none --outfile=site/firebase-client.bundle.js
 
       - name: Run fetch pipeline
         if: github.event_name == 'schedule' || inputs.refresh

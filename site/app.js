@@ -3,9 +3,104 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
 let viewerState = null, curationState = 'loading', resolutionMap = {};
-let data, catalogScreenCount = 0, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
-try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
-try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
+const boardModel = window.HuggingBoardModel;
+let data, catalogScreenCount = 0, limit = 48, selected = new Set(), boardRecords = [], activeBoardId = '', board = [], savedCollections = [], storageWarning = '';
+function readStoredJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
+function makeLocalBoard(name = 'Saved board', appIds = [], collectionIds = []) {
+  const id = `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  return boardModel.normalizeBoard({id, localId:id, name, appIds, collectionIds});
+}
+function loadBoardRecords() {
+  const stored = readStoredJson('oac-boards-v1', []);
+  if (Array.isArray(stored)) {
+    const normalized = stored.filter(x => x && typeof x === 'object').map(x => boardModel.normalizeBoard(x));
+    if (normalized.length) return normalized;
+  }
+  const legacyApps = readStoredJson('oac-board', []);
+  const legacyCollections = readStoredJson('oac-board-collections', []);
+  return [makeLocalBoard('Saved board', legacyApps, legacyCollections)];
+}
+boardRecords = loadBoardRecords();
+try { activeBoardId = localStorage.getItem('oac-active-board') || ''; } catch {}
+if (!boardRecords.some(x => x.id === activeBoardId)) activeBoardId = boardRecords[0].id;
+function activeBoardRecord() { return boardRecords.find(x => x.id === activeBoardId) || boardRecords[0]; }
+function cloneBoard(value) { return boardModel.normalizeBoard(value); }
+board = [...activeBoardRecord().appIds];
+savedCollections = [...activeBoardRecord().collectionIds];
+function persistBoard({notify = true} = {}) {
+  const current = activeBoardRecord();
+  if (!current) return;
+  current.appIds = boardModel.uniqueIds(board, 5000);
+  current.collectionIds = boardModel.uniqueIds(savedCollections, 500);
+  current.updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem('oac-boards-v1', JSON.stringify(boardRecords));
+    localStorage.setItem('oac-active-board', current.id);
+    localStorage.setItem('oac-board', JSON.stringify(board));
+    localStorage.setItem('oac-board-collections', JSON.stringify(savedCollections));
+    storageWarning = '';
+  } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+  if (notify) window.dispatchEvent(new CustomEvent('hugging:board-change', {detail:{board:cloneBoard(current)}}));
+}
+function activateBoard(id) {
+  const next = boardRecords.find(x => x.id === id);
+  if (!next) return false;
+  activeBoardId = next.id;
+  board = [...next.appIds]; savedCollections = [...next.collectionIds];
+  persistBoard({notify:false});
+  syncActions(); render();
+  window.dispatchEvent(new CustomEvent('hugging:board-select', {detail:{board:cloneBoard(next)}}));
+  return true;
+}
+function renderBoardToolbar() {
+  const toolbar = $('#boardToolbar');
+  if (!toolbar) return;
+  toolbar.hidden = route() !== 'boards';
+  if (toolbar.hidden) return;
+  const select = $('#boardSelect');
+  select.innerHTML = boardRecords.map(x => `<option value="${esc(x.id)}">${esc(x.name)}${x.ownerUid ? ' · synced' : ' · this device'}</option>`).join('');
+  select.value = activeBoardId;
+}
+window.huggingApp = {
+  getBoards: () => boardRecords.map(cloneBoard),
+  getActiveBoard: () => cloneBoard(activeBoardRecord()),
+  selectBoard: activateBoard,
+  setCloudBoard(localId, remoteRecord) {
+    const record = boardModel.normalizeBoard(remoteRecord);
+    record.localId = localId || record.localId;
+    record.cloudId = record.cloudId || record.id;
+    const index = boardRecords.findIndex(x => x.id === localId || x.localId === localId || x.id === record.id || x.cloudId === record.id);
+    if (index < 0) boardRecords.push(record); else boardRecords[index] = record;
+    if (activeBoardId === localId || activeBoardId === record.localId || activeBoardId === record.id || activeBoardRecord()?.cloudId === record.id) {
+      activeBoardId = record.id; board = [...record.appIds]; savedCollections = [...record.collectionIds];
+      persistBoard({notify:false});
+    } else try { localStorage.setItem('oac-boards-v1', JSON.stringify(boardRecords)); } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    renderBoardToolbar(); render();
+  },
+  setCloudBoards(remoteRecords, user) {
+    const cloud = Array.isArray(remoteRecords) ? remoteRecords.map(x => boardModel.normalizeBoard(x)) : [];
+    const active = activeBoardRecord();
+    const matchingCloud = cloud.find(x => x.localId === active.id || x.id === active.cloudId);
+    const cloudLocalIds = new Set(cloud.map(x => x.localId));
+    const local = boardRecords.filter(x => !x.ownerUid && !cloudLocalIds.has(x.id));
+    boardRecords = [...local, ...cloud.filter(x => !local.some(y => y.id === x.id || y.id === x.localId))];
+    if (matchingCloud) activeBoardId = matchingCloud.id;
+    else if (!boardRecords.some(x => x.id === activeBoardId)) activeBoardId = cloud.find(x => x.ownerUid === user?.uid)?.id || boardRecords[0]?.id || '';
+    if (!activeBoardId) { const first = makeLocalBoard(); boardRecords.push(first); activeBoardId = first.id; }
+    const current = activeBoardRecord(); board = [...current.appIds]; savedCollections = [...current.collectionIds];
+    persistBoard({notify:false}); renderBoardToolbar(); render();
+    window.dispatchEvent(new CustomEvent('hugging:board-select', {detail:{board:cloneBoard(current)}}));
+  },
+  applyCloudBoard(remoteRecord) {
+    const record = boardModel.normalizeBoard(remoteRecord);
+    const index = boardRecords.findIndex(x => x.id === record.id);
+    if (index < 0) boardRecords.push(record); else boardRecords[index] = record;
+    if (activeBoardId === record.id || activeBoardRecord()?.cloudId === record.id) {
+      activeBoardId = record.id; board = [...record.appIds]; savedCollections = [...record.collectionIds];
+    }
+    persistBoard({notify:false}); renderBoardToolbar(); render();
+  }
+};
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
 const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
 function media(s, fullSize = false) {
@@ -121,6 +216,7 @@ function render() {
   const r = route(), informational = ['agents','plugin'].includes(r);
   document.querySelectorAll('nav a').forEach(a => { const on = a.hash === '#' + r; a.classList.toggle('active',on); on ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'); });
   $('#hero').hidden = r !== 'apps'; $('#title').textContent = routes[r];
+  renderBoardToolbar();
   $('#controls').hidden = informational; $('#export').hidden = informational;
   $('#kind').disabled = true;
   const built = new Date(data.coverage?.generatedAt);
@@ -135,7 +231,8 @@ function render() {
   }
   $('#export').disabled = false;
   const items = currentItems(), collections = r === 'boards' ? currentBoardCollections() : [];
-  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? ' · saved on this device' : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
+  const boardStatus = r === 'boards' ? (activeBoardRecord().ownerUid ? ' · synced board' : ' · saved on this device') : '';
+  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${boardStatus}${storageWarning ? ' · ' + storageWarning : ''}`;
   $('#more').hidden = items.length <= limit;
   $('#content').className = ['elements','flows'].includes(r) || collections.length ? 'grid curated-grid' : 'grid';
   const empty = r === 'boards' ? '<h3>Your board is empty.</h3><p>Save screenshots or a curated flow, then export your research board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h3>No ${esc(routes[r].toLowerCase())} in this dataset</h3><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h3>No matching results</h3><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
@@ -220,13 +317,13 @@ document.addEventListener('click', e => {
   else if (b.dataset.saveCollection) {
     const id = b.dataset.saveCollection;
     savedCollections = savedCollections.includes(id) ? savedCollections.filter(x => x !== id) : [...savedCollections,id];
-    try { localStorage.setItem('oac-board-collections',JSON.stringify(savedCollections)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    persistBoard();
     if (route() === 'boards') render();
     syncActions();
     if (storageWarning) $('#status').textContent = storageWarning;
   } else if (b.dataset.save) {
     const id = b.dataset.save; board = board.includes(id) ? board.filter(x => x !== id) : [...board,id];
-    try { localStorage.setItem('oac-board',JSON.stringify(board)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    persistBoard();
     if (route() === 'boards') render();
     syncActions();
     if (storageWarning) $('#status').textContent = storageWarning;
@@ -264,8 +361,25 @@ $('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').
 $('#close').onclick = () => $('#viewer').close();
 $('#viewer').addEventListener('click', e => { if (e.target === $('#viewer')) $('#viewer').close(); });
 $('#more').onclick = () => { limit += 48; render(); };
+$('#boardSelect').addEventListener('change', e => window.huggingApp.selectBoard(e.target.value));
+$('#newBoard').onclick = () => { $('#boardName').value = ''; $('#boardDialog').showModal(); $('#boardName').focus(); };
+$('#boardCreateForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#boardName').value.trim(); if (!name) return;
+  const created = makeLocalBoard(name); boardRecords.push(created); activateBoard(created.id);
+  $('#boardDialog').close(); $('#boardSelect').focus();
+});
+$('#boardClose').onclick = () => $('#boardDialog').close();
+$('#shareBoard').onclick = () => {
+  if (!$('#accountDialog').open) $('#accountDialog').showModal();
+  window.dispatchEvent(new CustomEvent('hugging:share-board-request', {detail:{board:cloneBoard(activeBoardRecord())}}));
+};
 ['search','category','kind','sort'].forEach(id => $('#' + id).addEventListener('input', () => { limit = 48; render(); }));
-window.addEventListener('hashchange', () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); });
+window.addEventListener('hashchange', () => {
+  const navigate = () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); };
+  if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(navigate);
+  else navigate();
+});
 $('#export').onclick = () => {
   if (!data || ['agents','plugin'].includes(route())) return;
   const items = currentItems();

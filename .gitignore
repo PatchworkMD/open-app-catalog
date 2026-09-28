@@ -1,8 +1,10 @@
 __pycache__/
 *.pyc
 .DS_Store
+node_modules/
 site/assets/
 research/
+site/firebase-client.bundle.js
 
 # Built from the current snapshot before deployment
 site/apps/
