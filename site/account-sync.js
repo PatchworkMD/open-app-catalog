@@ -85,15 +85,24 @@ function showSetup(reason) {
 function setCloudBoard(localIdValue, record) {
   localBoardId = localIdValue;
   activeCloudBoard = record;
-  app()?.setCloudBoard?.(localIdValue, record);
+  return app()?.setCloudBoard?.(localIdValue, record) || record;
 }
 
-function applyRemoteBoard(record) {
+async function applyRemoteBoard(record) {
   if (!record) return;
   activeCloudBoard = record;
   applyingRemote = true;
-  try { app()?.applyCloudBoard?.(record); }
+  let applied;
+  try { applied = app()?.applyCloudBoard?.(record); }
   finally { applyingRemote = false; }
+  if (applied && boardModel.hasPendingSync(applied)) {
+    try {
+      await syncBoard(applied);
+      setStatus('Saved board changes are synced.');
+    } catch {
+      setStatus('Your board changes are saved on this device. Cloud sync will retry when available.');
+    }
+  }
 }
 
 function watchBoard(record) {
@@ -105,7 +114,7 @@ function watchBoard(record) {
     if (!snapshot.exists()) return;
     const latest = normalizeRemote(snapshot);
     remoteBoards.set(latest.id, latest);
-    if (activeCloudBoard?.id === latest.id) applyRemoteBoard(latest);
+    if (activeCloudBoard?.id === latest.id) void applyRemoteBoard(latest);
   }, error => setStatus(error?.message || 'Live board updates are unavailable.'));
 }
 
@@ -232,11 +241,11 @@ async function loadBoards() {
     localBoardId = selectedId;
     activeCloudBoard = selectedRemote;
     setCloudBoard(selectedId, selectedRemote);
-    watchBoard(selectedRemote);
-    applyRemoteBoard(selectedRemote);
+    await applyRemoteBoard(selectedRemote);
+    watchBoard(activeCloudBoard);
   } else {
     activeCloudBoard = selectedRemote || null;
-    if (activeCloudBoard) { watchBoard(activeCloudBoard); applyRemoteBoard(activeCloudBoard); }
+    if (activeCloudBoard) { await applyRemoteBoard(activeCloudBoard); watchBoard(activeCloudBoard); }
     else await ensureDefaultCloudBoard();
   }
   if (activeCloudBoard) app()?.setCloudBoards?.([...remoteBoards.values()], user);
@@ -263,6 +272,7 @@ async function syncBoard(board) {
   if (activeCloudBoard?.id === target.id && merged) {
     activeCloudBoard = { ...target, appIds:merged.screenshotIds, collectionIds:merged.collectionIds };
     remoteBoards.set(target.id, activeCloudBoard);
+    app()?.setCloudBoard?.(localId(board) || target.localId, activeCloudBoard);
   }
 }
 
@@ -346,6 +356,12 @@ function bind() {
     const mode = node('authMode'); if (!mode) return;
     mode.value = mode.value === 'signup' ? 'signin' : 'signup';
     if (node('authSubmit')) node('authSubmit').textContent = mode.value === 'signup' ? 'Create account' : 'Sign in';
+    const toggle = node('authToggle');
+    if (toggle) {
+      const signup = mode.value === 'signup';
+      toggle.textContent = signup ? 'Already have an account? Sign in' : 'Create an account';
+      toggle.setAttribute('aria-pressed', String(signup));
+    }
   });
   node('googleSignIn')?.addEventListener('click', async () => {
     try {
@@ -441,7 +457,7 @@ function bind() {
       localBoardId = localId(changed);
       watchBoard(activeCloudBoard);
       renderMembers();
-      if (apply) applyRemoteBoard(activeCloudBoard);
+      if (apply) void applyRemoteBoard(activeCloudBoard);
     } else if (activeCloudBoard) {
       activeCloudBoard = null;
       unsubscribeBoard?.(); unsubscribeBoard = null;

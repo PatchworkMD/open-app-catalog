@@ -27,6 +27,8 @@
       memberEmails: emails,
       appIds: uniqueIds(board.appIds, 5000),
       collectionIds: uniqueIds(board.collectionIds, 1000),
+      syncBaseAppIds: Array.isArray(board.syncBaseAppIds) ? uniqueIds(board.syncBaseAppIds, 5000) : null,
+      syncBaseCollectionIds: Array.isArray(board.syncBaseCollectionIds) ? uniqueIds(board.syncBaseCollectionIds, 1000) : null,
       updatedAt: board.updatedAt || null
     };
   }
@@ -47,5 +49,28 @@
     return {action:'reject', message:'This email has an invitation with an unknown status. Ask the board owner to review it.'};
   }
 
-  return {normalizeBoard, uniqueIds, applySetDelta, invitationDecision};
+  function reconcileCloudBoard(localValue, remoteValue) {
+    const remote = normalizeBoard(remoteValue);
+    const local = localValue ? normalizeBoard(localValue) : null;
+    const merge = (remoteIds, localIds, baseIds, limit) => {
+      if (Array.isArray(baseIds)) return applySetDelta(remoteIds, baseIds, localIds);
+      return uniqueIds([...remoteIds, ...(localIds || [])], limit);
+    };
+    return {
+      ...remote,
+      appIds:merge(remote.appIds, local?.appIds, local?.syncBaseAppIds, 5000),
+      collectionIds:merge(remote.collectionIds, local?.collectionIds, local?.syncBaseCollectionIds, 1000),
+      syncBaseAppIds:[...remote.appIds],
+      syncBaseCollectionIds:[...remote.collectionIds]
+    };
+  }
+
+  function hasPendingSync(value) {
+    const board = normalizeBoard(value);
+    if (!Array.isArray(board.syncBaseAppIds) || !Array.isArray(board.syncBaseCollectionIds)) return false;
+    const sameSet = (left, right) => left.length === right.length && left.every(id => right.includes(id));
+    return !sameSet(board.appIds, board.syncBaseAppIds) || !sameSet(board.collectionIds, board.syncBaseCollectionIds);
+  }
+
+  return {normalizeBoard, uniqueIds, applySetDelta, invitationDecision, reconcileCloudBoard, hasPendingSync};
 });

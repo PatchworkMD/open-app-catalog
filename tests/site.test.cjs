@@ -49,6 +49,15 @@ const {catalogBase} = require('./browser-fixture.cjs');
     await page.locator('#accountButton').click();
     assert.equal(await page.locator('#accountDialog').evaluate(el => el.open),true);
     await page.getByText('Cloud sync is off. Your saved board stays on this device.',{exact:true}).waitFor();
+    await page.locator('#accountSetup').evaluate(el => { el.hidden = true; });
+    await page.locator('#accountSignedOut').evaluate(el => { el.hidden = false; });
+    await page.locator('#authToggle').click();
+    assert.equal(await page.locator('#authMode').inputValue(),'signup');
+    assert.equal(await page.locator('#authSubmit').textContent(),'Create account');
+    assert.equal(await page.locator('#authToggle').getAttribute('aria-pressed'),'true');
+    await page.locator('#authToggle').click();
+    assert.equal(await page.locator('#authMode').inputValue(),'signin');
+    assert.equal(await page.locator('#authToggle').getAttribute('aria-pressed'),'false');
     await page.locator('#accountClose').click();
     const [download] = await Promise.all([page.waitForEvent('download'),page.locator('#export').click()]);
     const exported = JSON.parse(await fs.readFile(await download.path(),'utf8'));
@@ -77,6 +86,30 @@ const {catalogBase} = require('./browser-fixture.cjs');
     await page.screenshot({path:path.join(evidence,'mobile.png')});
     await page.goto(base + '#plugin'); await page.locator('#content .doc h2').waitFor();
     await page.screenshot({path:path.join(evidence,'plugin.png')});
+    const syncPage = await browser.newPage();
+    const syncBase = await catalogBase(syncPage);
+    await syncPage.route('**/account-sync.js*',route => route.abort());
+    await syncPage.addInitScript(() => {
+      localStorage.setItem('oac-active-board','cloud-1');
+      localStorage.setItem('oac-boards-v1',JSON.stringify([{
+        id:'cloud-1',localId:'local-1',cloudId:'cloud-1',ownerUid:'owner-1',name:'Research',
+        syncBaseAppIds:['keep','remove'],appIds:['keep','local-add'],
+        syncBaseCollectionIds:['flow-keep','flow-remove'],collectionIds:['flow-keep','local-flow']
+      }]));
+    });
+    await syncPage.goto(syncBase + '#boards');
+    await syncPage.locator('#coverage').waitFor();
+    const remote = {id:'cloud-1',localId:'local-1',cloudId:'cloud-1',ownerUid:'owner-1',name:'Research',
+      appIds:['keep','remove','remote-add'],collectionIds:['flow-keep','flow-remove','remote-flow']};
+    await syncPage.evaluate(record => window.huggingApp.setCloudBoards([record],{uid:'owner-1'}),remote);
+    let reconciled = await syncPage.evaluate(() => window.huggingApp.getActiveBoard());
+    assert.deepEqual(new Set(reconciled.appIds),new Set(['keep','local-add','remote-add']));
+    assert.deepEqual(new Set(reconciled.collectionIds),new Set(['flow-keep','local-flow','remote-flow']));
+    await syncPage.evaluate(record => window.huggingApp.applyCloudBoard({...record,appIds:[...record.appIds,'new-remote'],collectionIds:[...record.collectionIds,'new-flow']}),remote);
+    reconciled = await syncPage.evaluate(() => window.huggingApp.getActiveBoard());
+    assert(reconciled.appIds.includes('local-add') && reconciled.appIds.includes('new-remote'));
+    assert(reconciled.collectionIds.includes('local-flow') && reconciled.collectionIds.includes('new-flow'));
+    await syncPage.close();
     const blocked = await browser.newPage();
     await catalogBase(blocked);
     await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));
@@ -90,7 +123,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
     assert.match(await storage.locator('#status').textContent(),/Storage unavailable/);
     await storage.close();
     assert.deepEqual(errors,[]);
-    console.log('PASS: keyboard, comparison sync, multi-board persistence/export, account fallback, filters, routes, mobile, load failure, storage failure');
+    console.log('PASS: keyboard, comparison sync, multi-board persistence/export, account fallback/signup toggle, cloud edit reconciliation, filters, routes, mobile, load failure, storage failure');
     console.log('Screenshots: ' + evidence);
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode=1; });

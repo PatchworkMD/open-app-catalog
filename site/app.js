@@ -31,7 +31,7 @@ function persistBoard({notify = true} = {}) {
   const current = activeBoardRecord();
   if (!current) return;
   current.appIds = boardModel.uniqueIds(board, 5000);
-  current.collectionIds = boardModel.uniqueIds(savedCollections, 500);
+  current.collectionIds = boardModel.uniqueIds(savedCollections, 1000);
   current.updatedAt = new Date().toISOString();
   try {
     localStorage.setItem('oac-boards-v1', JSON.stringify(boardRecords));
@@ -66,7 +66,8 @@ window.huggingApp = {
   getActiveBoard: () => cloneBoard(activeBoardRecord()),
   selectBoard: activateBoard,
   setCloudBoard(localId, remoteRecord) {
-    const record = boardModel.normalizeBoard(remoteRecord);
+    const existing = boardRecords.find(x => x.id === localId || x.localId === localId || x.id === remoteRecord.id || x.cloudId === remoteRecord.id);
+    const record = boardModel.reconcileCloudBoard(existing, remoteRecord);
     record.localId = localId || record.localId;
     record.cloudId = record.cloudId || record.id;
     const index = boardRecords.findIndex(x => x.id === localId || x.localId === localId || x.id === record.id || x.cloudId === record.id);
@@ -76,9 +77,17 @@ window.huggingApp = {
       persistBoard({notify:false});
     } else try { localStorage.setItem('oac-boards-v1', JSON.stringify(boardRecords)); } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
     renderBoardToolbar(); render();
+    return cloneBoard(record);
   },
   setCloudBoards(remoteRecords, user) {
-    const cloud = Array.isArray(remoteRecords) ? remoteRecords.map(x => boardModel.normalizeBoard(x)) : [];
+    const incoming = Array.isArray(remoteRecords) ? remoteRecords.map(x => boardModel.normalizeBoard(x)) : [];
+    const cloud = incoming.map(remote => {
+      const existing = boardRecords.find(x =>
+        (x.ownerUid && x.ownerUid === remote.ownerUid && (x.id === remote.id || x.cloudId === remote.id || x.localId === remote.localId)) ||
+        (!x.ownerUid && (x.id === remote.localId || x.localId === remote.localId))
+      );
+      return boardModel.reconcileCloudBoard(existing, remote);
+    });
     const active = activeBoardRecord();
     const matchingCloud = cloud.find(x => x.localId === active.id || x.id === active.cloudId);
     const cloudLocalIds = new Set(cloud.map(x => x.localId));
@@ -89,16 +98,16 @@ window.huggingApp = {
     if (!activeBoardId) { const first = makeLocalBoard(); boardRecords.push(first); activeBoardId = first.id; }
     const current = activeBoardRecord(); board = [...current.appIds]; savedCollections = [...current.collectionIds];
     persistBoard({notify:false}); renderBoardToolbar(); render();
-    window.dispatchEvent(new CustomEvent('hugging:board-select', {detail:{board:cloneBoard(current)}}));
   },
   applyCloudBoard(remoteRecord) {
-    const record = boardModel.normalizeBoard(remoteRecord);
-    const index = boardRecords.findIndex(x => x.id === record.id);
+    const index = boardRecords.findIndex(x => x.id === remoteRecord.id || x.cloudId === remoteRecord.id);
+    const record = boardModel.reconcileCloudBoard(index < 0 ? null : boardRecords[index], remoteRecord);
     if (index < 0) boardRecords.push(record); else boardRecords[index] = record;
     if (activeBoardId === record.id || activeBoardRecord()?.cloudId === record.id) {
       activeBoardId = record.id; board = [...record.appIds]; savedCollections = [...record.collectionIds];
     }
     persistBoard({notify:false}); renderBoardToolbar(); render();
+    return cloneBoard(record);
   }
 };
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
