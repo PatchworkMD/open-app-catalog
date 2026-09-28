@@ -70,10 +70,10 @@ before board access. Boards start private; owners invite collaborators by email.
 Hugging App records the invite but does not send email. Owners must notify the
 invited person outside the app.
 
-To finish setup, an owner must first open the [existing project in Firebase
-Console](https://console.firebase.google.com/project/patchworkmd-hugging-app-prod/overview)
-and accept Firebase's terms if prompted. Then register a web app, enable
-Google and Email/Password sign-in, add `catalog.patchworkmd.dev` to Firebase
+To finish setup, an owner must first create the dedicated Firebase project
+with ID `patchworkmd-hugging-app-prod` in the [Firebase Console](https://console.firebase.google.com/).
+Accept Firebase's terms if prompted. Then register a web app, enable Google and
+Email/Password sign-in, add `catalog.patchworkmd.dev` to Firebase
 Authentication's authorized domains, choose a Firestore database location, and
 copy the web app config into `site/firebase-config.json` with `enabled: true`.
 That client config is public browser data; never put a service-account key or
