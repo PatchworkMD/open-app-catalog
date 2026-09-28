@@ -641,7 +641,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
       "title": "Headspace: Sleep & Meditation",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Health & Fitness",
@@ -651,7 +652,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
       "title": "Headspace: Sleep & Meditation",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -661,7 +663,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
       "title": "Telegram Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -671,7 +674,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
       "title": "Telegram Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -681,7 +685,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
       "title": "Threads",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Productivity",
@@ -691,7 +696,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
       "title": "Notion: Notes, Tasks, AI",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -701,7 +707,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
       "title": "Signal - Private Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -711,7 +718,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
       "title": "Telegram Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -721,7 +729,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
       "title": "Threads",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Lifestyle",
@@ -731,7 +740,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
       "title": "Pinterest",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -741,7 +751,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
       "title": "Signal - Private Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Productivity",
@@ -751,7 +762,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
       "title": "Notion: Notes, Tasks, AI",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Lifestyle",
@@ -761,7 +773,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
       "title": "Pinterest",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Lifestyle",
@@ -771,7 +784,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/pinterest/id429047995?uo=4",
       "title": "Pinterest",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -791,7 +805,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
       "title": "Signal - Private Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -801,7 +816,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
       "title": "Discord - Talk, Play, Hang Out",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Productivity",
@@ -811,7 +827,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/notion-notes-tasks-ai/id1232780281?uo=4",
       "title": "Notion: Notes, Tasks, AI",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -821,7 +838,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
       "title": "Signal - Private Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -831,7 +849,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
       "title": "Discord - Talk, Play, Hang Out",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -841,7 +860,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
       "title": "Telegram Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -851,7 +871,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
       "title": "Discord - Talk, Play, Hang Out",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Health & Fitness",
@@ -861,7 +882,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008?uo=4",
       "title": "Headspace: Sleep & Meditation",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -871,7 +893,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
       "title": "Threads",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -881,7 +904,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
       "title": "Discord - Talk, Play, Hang Out",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     }
   ]
 }

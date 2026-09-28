@@ -96,14 +96,18 @@ Neither database is deployed or exposed by the website.
 ```sh
 python3 -m unittest discover -s pipeline -p 'test_*.py'
 node --check site/app.js
-python3 -m http.server 8791 --bind 127.0.0.1 --directory site
-# In another terminal, with Playwright and Chrome available:
 node tests/site.test.cjs
+node tests/curation.test.cjs
+node tests/media.test.cjs
+node tests/resolution.test.cjs
+node tests/viewer.test.cjs
 ```
 
 The browser check covers keyboard access, filters, routes, board persistence,
 exports, comparison state, mobile layout, and load/storage failures. It uses
-an isolated browser profile. It does not mutate the live site.
+an isolated browser profile and an in-memory local route, so it needs no preview
+server or listening port. Set `CATALOG_TEST_URL` to test a deployed preview.
+It does not mutate the live site.
 
 ## License
 
