@@ -80,7 +80,7 @@ test('verified owners can create private boards; other users cannot read or list
 });
 
 test('only a verified invitee can accept access and edit saved references', async () => {
-  const { db: ownerDb, boardRef } = await createOwnerBoard();
+  const { db: ownerDb } = await createOwnerBoard();
   const inviteRef = doc(ownerDb, 'boards/board-a/invites/invitee@example.com');
   await assertSucceeds(setDoc(inviteRef, {
     invitedEmail: 'invitee@example.com',
@@ -106,18 +106,19 @@ test('only a verified invitee can accept access and edit saved references', asyn
     doc(inviteeDb, 'boards/board-a/members', 'invitee'),
     memberData('invitee', 'invitee@example.com', 'member')
   ));
-  assert.equal((await assertSucceeds(getDoc(doc(inviteeDb, 'boards/board-a')))).exists(), true);
+  const sharedBoardRef = doc(inviteeDb, 'boards/board-a');
+  assert.equal((await assertSucceeds(getDoc(sharedBoardRef))).exists(), true);
 
-  await assertSucceeds(updateDoc(boardRef, {
+  await assertSucceeds(updateDoc(sharedBoardRef, {
     screenshotIds: ['screen-a', 'screen-b'],
     collectionIds: ['flow-a', 'flow-b'],
     updatedAt: serverTimestamp()
   }));
-  await assertFails(updateDoc(boardRef, {
+  await assertFails(updateDoc(sharedBoardRef, {
     title: 'Changed by collaborator',
     updatedAt: serverTimestamp()
   }));
-  await assertFails(deleteDoc(boardRef));
+  await assertFails(deleteDoc(sharedBoardRef));
 });
 
 test('unverified users cannot create boards, and invites stay private to owner and invitee', async () => {
