@@ -34,6 +34,19 @@ const screenshot = name => path.join(artifactDir, name);
       return image && image.complete && image.naturalWidth > 0 && image.classList.contains('loaded');
     });
 
+    const overflowReport = async () => page.evaluate(() => {
+      const viewportWidth = innerWidth;
+      const offenders = [...document.querySelectorAll('body *')].map(element => {
+        const box = element.getBoundingClientRect();
+        return {selector:element.id ? '#' + element.id : '.' + [...element.classList].join('.'), left:Math.round(box.left), right:Math.round(box.right), width:Math.round(box.width)};
+      }).filter(item => item.left < -1 || item.right > viewportWidth + 1).sort((a,b) => (b.right - viewportWidth) - (a.right - viewportWidth)).slice(0,5);
+      const viewer = document.querySelector('#viewer').getBoundingClientRect();
+      return {viewportWidth, scrollWidth:document.documentElement.scrollWidth, viewer:{left:Math.round(viewer.left),right:Math.round(viewer.right),width:Math.round(viewer.width)}, offenders};
+    });
+    const desktopOverflow = await overflowReport();
+    console.log('Desktop overflow diagnostics:', JSON.stringify(desktopOverflow));
+    assert(desktopOverflow.viewer.left >= 0 && desktopOverflow.viewer.right <= desktopOverflow.viewportWidth);
+
     const assertViewerFits = async () => {
       assert(await page.locator('#viewerContent').evaluate(element => element.scrollHeight <= element.clientHeight + 1));
       const image = await stage.boundingBox();
@@ -88,7 +101,9 @@ const screenshot = name => path.join(artifactDir, name);
     assert(mobilePrevious && mobilePrevious.width >= 40 && mobilePrevious.height >= 40);
     assert(mobileNext && mobileNext.width >= 40 && mobileNext.height >= 40);
     await assertViewerFits();
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    const mobileOverflow = await overflowReport();
+    console.log('Mobile overflow diagnostics:', JSON.stringify(mobileOverflow));
+    assert(mobileOverflow.scrollWidth <= mobileOverflow.viewportWidth);
     await page.screenshot({path:screenshot('app-viewer-mobile.png'),animations:'disabled'});
     await page.keyboard.press('Escape');
 
