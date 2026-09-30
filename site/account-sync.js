@@ -214,12 +214,21 @@ async function loadBoards() {
   await acceptInvites();
   const { collectionGroup, query, where, getDocs, doc, getDoc, collection, setDoc, serverTimestamp } = client.dbSdk;
   const memberships = await getDocs(query(collectionGroup(client.db, COLLECTIONS.members), where('uid', '==', user.uid)));
+  const memberRecords = boardModel.activeMemberships(memberships.docs.map(membership => ({
+    ...membership.data(), ref:membership.ref
+  })));
   const records = [];
-  for (const membership of memberships.docs) {
+  for (const membership of memberRecords) {
     const boardRef = membership.ref.parent.parent;
     if (!boardRef) continue;
-    const result = await getDoc(doc(client.db, COLLECTIONS.boards, boardRef.id));
-    if (result.exists()) records.push(normalizeRemote(result));
+    try {
+      const result = await getDoc(doc(client.db, COLLECTIONS.boards, boardRef.id));
+      if (result.exists()) records.push(normalizeRemote(result));
+    } catch (error) {
+      // Membership may be revoked after the collection-group query returns.
+      if (error?.code === 'permission-denied') continue;
+      throw error;
+    }
   }
   if (!records.length) {
     const owned = await getDocs(query(collection(client.db, COLLECTIONS.boards), where('ownerUid', '==', user.uid)));
