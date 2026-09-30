@@ -1,0 +1,24 @@
+name: UI browser tests
+
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'tests/site.test.cjs'
+      - 'tests/browser-fixture.cjs'
+      - '.github/workflows/ui-tests.yml'
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: npm install --no-save playwright
+      - name: Install Chromium
+        run: npx playwright install --with-deps chrome
+      - name: Run catalog browser checks
+        run: node tests/site.test.cjs
