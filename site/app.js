@@ -389,7 +389,7 @@ window.addEventListener('hashchange', () => {
   const navigate = () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); };
   if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { navigate(); return; }
   if (activeRouteTransition) {
-    activeRouteTransition.skip();
+    activeRouteTransition.skipTransition();
     navigate();
     return;
   }
