@@ -46,6 +46,7 @@ const screenshot = name => path.join(artifactDir, name);
     const desktopOverflow = await overflowReport();
     console.log('Desktop overflow diagnostics:', JSON.stringify(desktopOverflow));
     assert(desktopOverflow.viewer.left >= 0 && desktopOverflow.viewer.right <= desktopOverflow.viewportWidth);
+    assert(desktopOverflow.scrollWidth <= desktopOverflow.viewportWidth);
 
     const assertViewerFits = async () => {
       assert(await page.locator('#viewerContent').evaluate(element => element.scrollHeight <= element.clientHeight + 1));
