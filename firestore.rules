@@ -1,7 +1,10 @@
-// Owner setup: activate Firebase in the project Console, create a Web App,
-// enable Google and Email/Password sign-in, and create the Firestore database.
-// Copy that Web App's config into site/firebase-config.json, then set enabled=true.
-// Deploy these rules with `firebase deploy --only firestore:rules` after review.
+// Owner setup: activate Firebase, create a Web App, enable Google and Email/Password
+// sign-in, and create the Firestore database in patchworkmd-hugging-app-prod.
+// Keep site/firebase-config.json enabled=false while preparing the project.
+// Review firestore.rules and firestore.indexes.json, then deploy both with:
+// firebase deploy --project patchworkmd-hugging-app-prod --only firestore
+// Wait until the required indexes show READY in the Firebase Console before setting
+// enabled=true in the public site config. Emulator tests do not prove live index readiness.
 // Email/password users must verify their address before any board access.
 // Invite document IDs use the invited email so acceptance can match verified email.
 rules_version = '2';
