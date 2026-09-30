@@ -140,6 +140,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
     assert((await retinaPreview.getAttribute('srcset')).includes('/1290x2796bb.png 2x'));
     assert((await retinaPreview.evaluate(image => image.currentSrc)).endsWith('/1290x2796bb.png'),'Retina cards should use a sharp source');
     await retinaPage.goto(base + '#flows');
+    await retinaPage.waitForFunction(() => document.querySelector('#title')?.textContent === 'Flows');
     const collectionThumb = retinaPage.locator('.collection-preview-button img').first();
     await collectionThumb.waitFor();
     const flowSrcset = await collectionThumb.getAttribute('srcset');
