@@ -3,8 +3,9 @@
 // Keep site/firebase-config.json enabled=false while preparing the project.
 // Review firestore.rules and firestore.indexes.json, then deploy both with:
 // firebase deploy --project patchworkmd-hugging-app-prod --only firestore
-// Wait until the required indexes show READY in the Firebase Console before setting
-// enabled=true in the public site config. Emulator tests do not prove live index readiness.
+// Wait until index creation finishes and confirm the required indexes are enabled
+// and usable in the Firebase Console before setting enabled=true in the public config.
+// Emulator tests do not prove live index readiness.
 // Email/password users must verify their address before any board access.
 // Invite document IDs use the invited email so acceptance can match verified email.
 rules_version = '2';
