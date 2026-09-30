@@ -91,7 +91,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
         assert(await card.locator('.collection-title').innerText());
         assert(await card.locator('.collection-meta').innerText());
         assert(await card.locator('.collection-open').isVisible());
-        assert.equal(await card.locator('.collection-type').innerText(),route === 'flows' ? 'Listing collection' : 'UI element');
+        assert.equal(await card.locator('.collection-type').textContent(),route === 'flows' ? 'Listing collection' : 'UI element');
         await page.screenshot({path:path.join(evidence,route + '-cards.png')});
         await card.locator('.collection-open').click();
         await page.locator('#viewer.screen-viewer').waitFor();
