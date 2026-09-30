@@ -82,11 +82,12 @@ data; never put a service-account key or other private credential in the site.
 After a separately authorized review, deploy both `firestore.rules` and
 `firestore.indexes.json` with
 `firebase deploy --project patchworkmd-hugging-app-prod --only firestore`.
-In the Firebase Console, wait until the boards composite index and the invites
-and members collection-group indexes show `READY`. Index creation is
-asynchronous. Only after every required index is ready may a separately
-authorized site update set `enabled: true`. Emulator tests do not prove that
-live indexes exist or are ready. The GitHub catalog workflow bundles the pinned
+In the Firebase Console, wait until creation finishes for the boards
+composite index and the invites and members collection-group indexes, then
+confirm each is enabled and usable. Index creation is asynchronous. Only after
+every required index is usable may a separately authorized site update set
+`enabled: true`. Emulator tests do not prove that live indexes exist or are
+ready. The GitHub catalog workflow bundles the pinned
 Firebase SDK before deploying the site.
 
 Index formats and collection-group query requirements are documented in the
