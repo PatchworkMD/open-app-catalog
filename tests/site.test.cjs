@@ -98,6 +98,20 @@ const {catalogBase} = require('./browser-fixture.cjs');
         await page.keyboard.press('Escape');
       }
     }
+    const retinaPage = await browser.newPage({viewport:{width:800,height:600},deviceScaleFactor:2});
+    await catalogBase(retinaPage);
+    await retinaPage.goto(base + '#elements');
+    const retinaPreview = retinaPage.locator('.collection-preview-button img').first();
+    await retinaPreview.waitFor();
+    await retinaPage.waitForFunction(() => {
+      const image = document.querySelector('.collection-preview-button img');
+      return image?.complete && image.naturalWidth > 0;
+    });
+    assert.equal(await retinaPreview.getAttribute('loading'),'lazy');
+    assert((await retinaPreview.getAttribute('srcset')).includes('/1290x2796bb.png 2x'));
+    assert((await retinaPreview.evaluate(image => image.currentSrc)).endsWith('/1290x2796bb.png'),'Retina cards should use a sharp source');
+    await retinaPage.close();
+
     await page.setViewportSize({width:390,height:844});
     await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
