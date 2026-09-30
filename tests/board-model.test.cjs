@@ -27,10 +27,10 @@ test('Firebase indexes cover every filtered account query shape', () => {
     );
   }
 
-  assert.match(accountSyncSource, /query\\(collection\\(client\\.db, COLLECTIONS\\.boards\\),\\s*where\\('ownerUid', '==', user\\.uid\\),\\s*where\\('localId', '==', (?:boardId|localBoardId)\\)\\)/s);
-  assert.match(accountSyncSource, /query\\(collectionGroup\\(client\\.db, COLLECTIONS\\.invites\\),\\s*where\\('invitedEmail', '==', email\\)\\)/s);
-  assert.match(accountSyncSource, /query\\(collectionGroup\\(client\\.db, COLLECTIONS\\.members\\),\\s*where\\('uid', '==', user\\.uid\\)\\)/s);
-  assert.match(accountSyncSource, /query\\(collection\\(client\\.db, COLLECTIONS\\.boards\\),\\s*where\\('ownerUid', '==', user\\.uid\\)\\)/s);
+  assert.match(accountSyncSource, /query\(collection\(client\.db, COLLECTIONS\.boards\),\s*where\('ownerUid', '==', user\.uid\),\s*where\('localId', '==', (?:boardId|localBoardId)\)\)/s);
+  assert.match(accountSyncSource, /query\(collectionGroup\(client\.db, COLLECTIONS\.invites\),\s*where\('invitedEmail', '==', email\)\)/s);
+  assert.match(accountSyncSource, /query\(collectionGroup\(client\.db, COLLECTIONS\.members\),\s*where\('uid', '==', user\.uid\)\)/s);
+  assert.match(accountSyncSource, /query\(collection\(client\.db, COLLECTIONS\.boards\),\s*where\('ownerUid', '==', user\.uid\)\)/s);
 });
 
 test('normalizes local and cloud board identity without changing saved references', () => {
