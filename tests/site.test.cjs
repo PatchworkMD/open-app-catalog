@@ -110,6 +110,12 @@ const {catalogBase} = require('./browser-fixture.cjs');
     assert.equal(await retinaPreview.getAttribute('loading'),'lazy');
     assert((await retinaPreview.getAttribute('srcset')).includes('/1290x2796bb.png 2x'));
     assert((await retinaPreview.evaluate(image => image.currentSrc)).endsWith('/1290x2796bb.png'),'Retina cards should use a sharp source');
+    await retinaPage.goto(base + '#flows');
+    const collectionThumb = retinaPage.locator('.collection-preview-button img').first();
+    await collectionThumb.waitFor();
+    const flowSrcset = await collectionThumb.getAttribute('srcset');
+    assert(flowSrcset.includes('/640x1386bb.jpg 2x'),'small collection previews should keep the lighter Retina source');
+    assert(!flowSrcset.includes('/1290x2796bb.png'),'small collection previews should not request full-size assets');
     await retinaPage.close();
 
     await page.setViewportSize({width:390,height:844});
