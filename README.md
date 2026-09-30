@@ -74,12 +74,24 @@ To finish setup, an owner must first create the dedicated Firebase project
 with ID `patchworkmd-hugging-app-prod` in the [Firebase Console](https://console.firebase.google.com/).
 Accept Firebase's terms if prompted. Then register a web app, enable Google and
 Email/Password sign-in, add `catalog.patchworkmd.dev` to Firebase
-Authentication's authorized domains, choose a Firestore database location, and
-copy the web app config into `site/firebase-config.json` with `enabled: true`.
-That client config is public browser data; never put a service-account key or
-other private credential in the site. Review `firestore.rules`, then deploy it
-with `firebase deploy --only firestore:rules`. The GitHub catalog workflow
-bundles the pinned Firebase SDK before deploying the site.
+Authentication's authorized domains, and create the Firestore database.
+
+Copy the web app config into `site/firebase-config.json`, but keep
+`enabled: false` while preparing Firebase. This client config is public browser
+data; never put a service-account key or other private credential in the site.
+After a separately authorized review, deploy both `firestore.rules` and
+`firestore.indexes.json` with
+`firebase deploy --project patchworkmd-hugging-app-prod --only firestore`.
+In the Firebase Console, wait until the boards composite index and the invites
+and members collection-group indexes show `READY`. Index creation is
+asynchronous. Only after every required index is ready may a separately
+authorized site update set `enabled: true`. Emulator tests do not prove that
+live indexes exist or are ready. The GitHub catalog workflow bundles the pinned
+Firebase SDK before deploying the site.
+
+Index formats and collection-group query requirements are documented in the
+[Firebase index definition reference](https://firebase.google.com/docs/reference/firestore/indexes)
+and [Firestore index overview](https://firebase.google.com/docs/firestore/query-data/index-overview).
 
 Firebase activation adds Firebase services to the existing Google Cloud
 project and cannot be undone. The account UI remains in local-only mode until
