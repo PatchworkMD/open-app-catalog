@@ -13,7 +13,8 @@ service cloud.firestore {
         && request.auth.token.email is string;
     }
     function boardMember(boardId) {
-      return verified() && exists(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid));
+      let membership = get(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid)).data;
+      return verified() && membership.uid == request.auth.uid && membership.status == 'active';
     }
     function boardOwner(boardId) {
       return boardMember(boardId)
@@ -60,9 +61,9 @@ service cloud.firestore {
             || (request.resource.data.role == 'member'
               && get(/databases/$(database)/documents/boards/$(boardId)/invites/$(request.auth.token.email.lower())).data.status == 'accepted'
               && get(/databases/$(database)/documents/boards/$(boardId)/invites/$(request.auth.token.email.lower())).data.acceptedBy == request.auth.uid));
-        allow update: if verified() && boardOwner(boardId)
-          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'status', 'createdAt'])
-          && request.resource.data.uid == uid && request.resource.data.role == 'member';
+        allow update: if verified() && boardOwner(boardId) && uid != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['active', 'inactive'];
         allow delete: if verified() && boardOwner(boardId) && uid != request.auth.uid;
       }
 
