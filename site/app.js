@@ -8,11 +8,13 @@ try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.
 try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
 const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
-function media(s, fullSize = false) {
+function media(s, fullSize = false, sharpPreview = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
   const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
+  const small = full.replace('/1290x2796bb.png', '/640x1386bb.jpg');
+  const retina = sharpPreview ? full : small;
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && retina ? `srcset="${esc(p)} 1x, ${esc(retina)} 2x"` : ''} data-preview="${esc(p)}" loading="${fullSize ? 'eager' : 'lazy'}" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
 function handleMediaLoad(image) {
   image.classList.add('loaded');
@@ -50,8 +52,12 @@ function curationCard(x, kind) {
   const ids = kind === 'flows' ? x.assetIds : [x.screenId];
   const shots = ids.map(id => data.screens.find(s => s.id === id)).filter(Boolean);
   const collectionId = `${kind}:${x.id}`, isSaved = savedCollections.includes(collectionId);
+  const appName = x.appName || data.apps.find(app => app.id === x.appId)?.name || '';
+  const type = kind === 'flows' ? 'Listing collection' : 'UI element';
+  const detail = kind === 'flows' ? shots.length + ' screenshots · order unverified' : (shots.length ? '1 screenshot · visual review' : 'No screenshot available');
   const actions = kind === 'flows' ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${isSaved}">${isSaved ? 'Saved' : 'Save collection'}</button>` : ids.map(id => `<button data-save="${esc(id)}" aria-pressed="${board.includes(id)}">${board.includes(id) ? 'Saved' : 'Save'}</button><button data-select="${esc(id)}" aria-pressed="${selected.has(id)}">${selected.has(id) ? 'Selected' : 'Compare'}</button>`).join('');
-  return `<article class="pin collection-card collection-${kind}"><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Open ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s)}</span>`).join('')}</div><span class="pincaption">${esc(x.title)}</span><span class="pinmeta">${esc(x.category || 'Curated reference')}${x.appName ? ` · ${esc(x.appName)}` : ''} · ${shots.length} screenshot${shots.length === 1 ? '' : 's'}</span><p class="collection-description">${esc(x.description || '')}</p></button><div class="pinactions">${actions}</div></article>`;
+  const openLabel = kind === 'flows' ? 'Open collection' : 'Open screen';
+  return `<article class="pin collection-card collection-${kind}"><div class="collection-card-header"><div class="collection-card-copy"><span class="collection-type">${type}</span><h3 class="collection-title">${esc(x.title)}</h3><p class="collection-meta">${appName ? `<strong>${esc(appName)}</strong> · ` : ''}${esc(x.category || 'Curated reference')} · ${detail}</p><p class="collection-description">${esc(x.description || '')}</p></div><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="${openLabel}: ${esc(x.title)}">${openLabel}</button></div><button class="collection-preview-button" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Preview ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s, false, kind === 'elements')}</span>`).join('')}</div></button><div class="pinactions">${actions}</div></article>`;
 }
 function itemCategories(x) {
   return [...new Set([x.category, ...(x.chartMemberships || []).map(c => c.name), ...(x.categories || [])].filter(Boolean))];
@@ -70,9 +76,6 @@ function appCard(x) {
   const chart = appChart(x);
   const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(chart.rank) ? `<span class="pinrank">#${chart.rank} in ${esc(chart.category)}</span>` : '';
   return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(chart.category || 'App Store')}</span></button></article>`;
-}
-function appDetailCard(s, index, appId) {
-  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
 }
 function matchesFilters(x) {
   const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
@@ -160,11 +163,13 @@ function render() {
 function openScreens(shots, index, title, context = '', returnAppId = null) {
   if (!shots.length) return;
   viewerState = {shots, index, title, context, returnAppId};
+  $('#viewer').classList.remove('app-viewer');
   $('#viewer').classList.add('screen-viewer');
   renderScreen();
   if (!$('#viewer').open) $('#viewer').showModal();
 }
 function renderScreen() {
+  if (viewerState.app) { renderAppViewer(); return; }
   const {shots, index, title, context} = viewerState, s = shots[index];
   const returnApp = viewerState.returnAppId ? data.apps.find(app => app.id === viewerState.returnAppId) : null;
   const back = returnApp ? `<button class="screen-back" data-back-app="${esc(returnApp.id)}">Back to app</button>` : '';
@@ -180,21 +185,36 @@ function view(id, returnAppId = null) {
   const context = app ? `${displayCategory(app)} · App Store listing screenshots` : '';
   openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot', context, returnAppId);
 }
-function openApp(app, focusScreenId = null) {
-  const related = (app.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
-  viewerState = null;
-  $('#viewer').classList.remove('screen-viewer');
+function renderAppViewer() {
+  const {app, shots, index} = viewerState;
+  const shot = shots[index];
+  const rating = Number.isFinite(app.rating) ? ' · ' + app.rating.toFixed(1) + ' / 5 App Store rating' : '';
+  const appMeta = displayCategory(app) + ' · ' + shots.length + ' listing screenshot' + (shots.length === 1 ? '' : 's') + rating;
+  const reference = '<a class="app-viewer-reference" href="/apps/' + encodeURIComponent(app.id) + '/">Reference page ↗</a>';
+  const identity = '<div class="app-viewer-identity">' + appIcon(app) + '<div class="app-viewer-meta"><span>' + esc(appMeta) + '</span>' + reference + '</div></div>';
+  if (!shot) {
+    $('#viewerContent').innerHTML = identity + '<div class="empty app-viewer-empty"><h3>No screenshots available yet.</h3><p>This listing does not include screenshots in the current snapshot.</p>' + sourceLink(app.url) + '</div>';
+    return;
+  }
+  const stage = '<div class="app-viewer-stage"><button data-step="-1" aria-label="Previous screenshot" ' + (index === 0 ? 'disabled' : '') + '>Previous</button><figure class="app-viewer-canvas">' + media(shot, true) + '</figure><button data-step="1" aria-label="Next screenshot" ' + (index === shots.length - 1 ? 'disabled' : '') + '>Next</button></div>';
+  const toolbar = '<div class="app-viewer-toolbar"><span role="status" class="app-viewer-position">' + (index + 1) + ' / ' + shots.length + '</span>' + sourceLink(shot.sourceUrl || app.url) + '<div class="pinactions"><button data-save="' + esc(shot.id) + '" aria-pressed="' + board.includes(shot.id) + '">' + (board.includes(shot.id) ? 'Saved' : 'Save') + '</button><button data-select="' + esc(shot.id) + '" aria-pressed="' + selected.has(shot.id) + '">' + (selected.has(shot.id) ? 'Selected' : 'Compare') + '</button></div></div>';
+  const thumbnails = '<div class="app-viewer-thumbnails" aria-label="Screenshots">' + shots.map((item, i) => '<button data-thumb="' + i + '" aria-label="Screenshot ' + (i + 1) + '" aria-current="' + (i === index ? 'true' : 'false') + '">' + media({...item,title:'Screenshot ' + (i + 1)}) + '</button>').join('') + '</div>';
   $('#viewerTitle').textContent = app.name;
-  const links = [sourceLink(app.url), `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>`].filter(Boolean).join(' · ');
-  const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
-  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(displayCategory(app))} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
-  const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
-  $('#viewerContent').innerHTML = summary + gallery;
+  $('#viewerContent').innerHTML = identity + stage + toolbar + thumbnails;
+}
+function openApp(app, focusScreenId = null) {
+  const shots = (app.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
+  const focused = shots.findIndex(s => s.id === focusScreenId);
+  viewerState = {app, shots, index:focused >= 0 ? focused : 0, title:app.name, context:'App Store listing screenshots'};
+  $('#viewer').classList.remove('screen-viewer');
+  $('#viewer').classList.add('app-viewer');
+  $('#viewerTitle').textContent = app.name;
+  renderAppViewer();
   if (!$('#viewer').open) $('#viewer').showModal();
   if (focusScreenId) requestAnimationFrame(() => {
-    const target = [...document.querySelectorAll('.app-detail-image')].find(button => button.dataset.view === focusScreenId);
+    const target = document.querySelector('.app-viewer-thumbnails [data-thumb="' + viewerState.index + '"]');
     target?.focus({preventScroll:true});
-    target?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+    target?.scrollIntoView({block:'nearest',inline:'nearest'});
   });
 }
 function viewCollection(id, kind) {
@@ -262,7 +282,7 @@ document.addEventListener('click', e => {
 $('#compare').onclick = () => {
   if (!data) return;
   if (selected.size < 2) { $('#status').textContent = 'Select at least two screens to compare'; return; }
-  viewerState = null; $('#viewer').classList.remove('screen-viewer');
+  viewerState = null; $('#viewer').classList.remove('screen-viewer','app-viewer');
   $('#viewerTitle').textContent = 'Compare references';
   $('#viewerContent').innerHTML = `<div class="comparegrid">${data.screens.filter(s => selected.has(s.id)).map(screenCard).join('')}</div>`;
   if (!$('#viewer').open) $('#viewer').showModal();
@@ -271,9 +291,9 @@ document.addEventListener('keydown', e => {
   if (!$('#viewer').open || !viewerState || e.altKey || e.ctrlKey || e.metaKey || !['ArrowLeft','ArrowRight'].includes(e.key) || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   e.preventDefault();
   const index = viewerState.index + (e.key === 'ArrowRight' ? 1 : -1);
-  if (index >= 0 && index < viewerState.shots.length) { viewerState.index = index; renderScreen(); $('.screen-thumbnails [aria-current="true"]')?.focus({preventScroll:true}); }
+  if (index >= 0 && index < viewerState.shots.length) { viewerState.index = index; renderScreen(); $('.screen-thumbnails [aria-current="true"], .app-viewer-thumbnails [aria-current="true"]')?.focus({preventScroll:true}); }
 });
-$('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').classList.remove('screen-viewer'); });
+$('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').classList.remove('screen-viewer','app-viewer'); });
 $('#close').onclick = () => $('#viewer').close();
 $('#viewer').addEventListener('click', e => { if (e.target === $('#viewer')) $('#viewer').close(); });
 $('#more').onclick = () => { limit += 48; render(); };

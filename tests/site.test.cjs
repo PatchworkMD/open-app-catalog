@@ -2,22 +2,52 @@
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const os = require('node:os');
 const path = require('node:path');
 const {catalogBase} = require('./browser-fixture.cjs');
 (async () => {
   const browser = await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
-  const page = await browser.newPage({viewport:{width:1440,height:1000}});
+  const page = await browser.newPage({viewport:{width:800,height:600}});
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   const base = await catalogBase(page);
-  const evidence = await fs.mkdtemp(path.join(os.tmpdir(),'hugging-app-qa-'));
+  const evidenceRoot = path.resolve('.omo/evidence');
+  await fs.mkdir(evidenceRoot, {recursive:true});
+  const evidence = await fs.mkdtemp(path.join(evidenceRoot,'hugging-app-qa-'));
   try {
     await page.goto(base + '#apps');
     await page.locator('.app-open').first().waitFor();
     assert.equal(await page.locator('.app-open').count(),48);
     await page.locator('.app-open').first().press('Enter');
-    assert.equal(await page.locator('#viewer').evaluate(el => el.open),true);
+    assert.equal(await page.locator('#viewer.app-viewer').evaluate(el => el.open),true);
+    const activeImage = page.locator('.app-viewer-canvas img');
+    await activeImage.waitFor();
+    await page.waitForFunction(() => {
+      const image = document.querySelector('.app-viewer-canvas img');
+      return image?.complete && image.naturalWidth > 0;
+    });
+    assert((await activeImage.getAttribute('src')).endsWith('/1290x2796bb.png'));
+    assert((await page.locator('.app-viewer-thumbnails button').count()) > 1);
+    const toolbar = await page.locator('.app-viewer-toolbar').boundingBox();
+    assert(toolbar && toolbar.y + toolbar.height <= 600,'app actions must remain visible at 800x600');
+    const imageSize = await activeImage.evaluate(image => {
+      const box = image.getBoundingClientRect();
+      return {naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,width:box.width,height:box.height};
+    });
+    assert(Math.abs(imageSize.width / imageSize.height - imageSize.naturalWidth / imageSize.naturalHeight) < 0.03,'active screenshot must keep its aspect ratio');
+    const originalThumb = await page.locator('.app-viewer-thumbnails [aria-current="true"]').getAttribute('data-thumb');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('.app-viewer-thumbnails [aria-current="true"]').getAttribute('data-thumb'),String(Number(originalThumb) + 1));
+    await page.keyboard.press('ArrowLeft');
+    const save = page.locator('.app-viewer-toolbar [data-save]');
+    await save.click(); assert.equal(await save.getAttribute('aria-pressed'),'true');
+    await save.click(); assert.equal(await save.getAttribute('aria-pressed'),'false');
+    const compare = page.locator('.app-viewer-toolbar [data-select]');
+    await compare.click(); assert.equal(await compare.getAttribute('aria-pressed'),'true');
+    await compare.click(); assert.equal(await compare.getAttribute('aria-pressed'),'false');
+    const sourceUrl = await page.locator('.app-viewer-toolbar a').first().getAttribute('href');
+    assert(sourceUrl && (sourceUrl.startsWith('https://apps.apple.com/') || sourceUrl.startsWith('https://itunes.apple.com/')));
+    await page.screenshot({path:path.join(evidence,'app-viewer-800x600.png')});
     await page.keyboard.press('Escape');
+    await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(() => window.scrollTo(0,0));
     await page.screenshot({path:path.join(evidence,'desktop.png')});
     await page.getByRole('link',{name:'Screens',exact:true}).click();
@@ -52,10 +82,81 @@ const {catalogBase} = require('./browser-fixture.cjs');
       await page.waitForFunction(() => document.querySelector('#coverage').textContent.includes('Snapshot'));
       if (['agents','plugin'].includes(route)) assert.equal(await page.locator('#export').isVisible(),false);
       if (route==='unknown') assert.equal(await page.locator('#title').textContent(),'Apps');
+      if (['flows','elements'].includes(route)) {
+        const card = page.locator('.collection-card').first();
+        await card.waitFor();
+        assert((await page.locator('.collection-card').count()) > 0);
+        const header = await card.locator('.collection-card-header').boundingBox();
+        const preview = await card.locator('.collection-previews').boundingBox();
+        assert(header && preview && header.y + header.height <= preview.y,'card hierarchy must precede the screenshot preview');
+        assert(await card.locator('.collection-title').innerText());
+        assert(await card.locator('.collection-meta').innerText());
+        assert(await card.locator('.collection-open').isVisible());
+        assert.equal(await card.locator('.collection-type').textContent(),route === 'flows' ? 'Listing collection' : 'UI element');
+        await page.screenshot({path:path.join(evidence,route + '-cards.png')});
+        await card.locator('.collection-open').click();
+        await page.locator('#viewer.screen-viewer').waitFor();
+        await page.keyboard.press('Escape');
+      }
     }
+    const retinaPage = await browser.newPage({viewport:{width:800,height:600},deviceScaleFactor:2});
+    await catalogBase(retinaPage);
+    await retinaPage.goto(base + '#elements');
+    const retinaPreview = retinaPage.locator('.collection-preview-button img').first();
+    await retinaPreview.waitFor();
+    await retinaPage.waitForFunction(() => {
+      const image = document.querySelector('.collection-preview-button img');
+      return image?.complete && image.naturalWidth > 0;
+    });
+    assert.equal(await retinaPreview.getAttribute('loading'),'lazy');
+    assert((await retinaPreview.getAttribute('srcset')).includes('/1290x2796bb.png 2x'));
+    assert((await retinaPreview.evaluate(image => image.currentSrc)).endsWith('/1290x2796bb.png'),'Retina cards should use a sharp source');
+    await retinaPage.goto(base + '#flows');
+    const collectionThumb = retinaPage.locator('.collection-preview-button img').first();
+    await collectionThumb.waitFor();
+    const flowSrcset = await collectionThumb.getAttribute('srcset');
+    assert(flowSrcset.includes('/640x1386bb.jpg 2x'),'small collection previews should keep the lighter Retina source');
+    assert(!flowSrcset.includes('/1290x2796bb.png'),'small collection previews should not request full-size assets');
+    await retinaPage.close();
+
+    const overlap = await browser.newPage({viewport:{width:800,height:600}});
+    overlap.on('pageerror', e => errors.push(e.message));
+    const overlapBase = await catalogBase(overlap);
+    const overlapData = JSON.parse(await fs.readFile(path.join(__dirname,'../site/data.json'),'utf8'));
+    overlapData.apps = overlapData.apps.filter(app => app.assetIds?.length).slice(0,2);
+    assert.equal(overlapData.apps.length,2);
+    overlapData.coverage = {...overlapData.coverage,rankBasis:'original-category-feed'};
+    for (const [i, app] of overlapData.apps.entries()) {
+      app.chartMemberships = [{name:app.category,rank:i + 1},{name:'Integration category',rank:2 - i}];
+    }
+    await overlap.route('**/data.json',route => route.fulfill({status:200,json:overlapData}));
+    await overlap.goto(overlapBase + '#apps');
+    await overlap.locator('.app-open').first().waitFor();
+    await overlap.locator('#category').selectOption({label:'Integration category'});
+    assert.equal(await overlap.locator('.app-open').count(),2);
+    assert.equal(await overlap.locator('.app-open').first().getAttribute('data-related'),overlapData.apps[1].id);
+    assert.equal(await overlap.locator('.pinrank').first().textContent(),'#1 in Integration category');
+    await overlap.locator('.app-open').first().click();
+    await overlap.locator('#viewer.app-viewer').waitFor();
+    assert((await overlap.locator('.app-viewer-meta').textContent()).startsWith('Integration category · '));
+    assert.equal(await overlap.locator('.app-viewer-thumbnails button').count(),overlapData.apps[1].assetIds.length);
+    await overlap.screenshot({path:path.join(evidence,'app-viewer-secondary-category.png')});
+    await overlap.close();
+
+
     await page.setViewportSize({width:390,height:844});
     await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.locator('.app-open').first().press('Enter');
+    await page.locator('#viewer.app-viewer').waitFor();
+    await page.waitForFunction(() => {
+      const image = document.querySelector('.app-viewer-canvas img');
+      return image?.complete && image.naturalWidth > 0;
+    });
+    const mobileToolbar = await page.locator('.app-viewer-toolbar').boundingBox();
+    assert(mobileToolbar && mobileToolbar.y + mobileToolbar.height <= 844,'app controls must remain visible on mobile');
+    await page.screenshot({path:path.join(evidence,'app-viewer-mobile.png')});
+    await page.keyboard.press('Escape');
     await page.screenshot({path:path.join(evidence,'mobile.png')});
     await page.goto(base + '#plugin'); await page.locator('#content .doc h2').waitFor();
     await page.screenshot({path:path.join(evidence,'plugin.png')});

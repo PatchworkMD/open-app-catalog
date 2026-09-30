@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync('site/app.js', 'utf8');
 const controls = {
   search:{value:''}, category:{value:''}, sort:{value:''},
-  viewer:{open:false,classList:{remove() {}},showModal() { this.open = true; }},
+  viewer:{open:false,classList:{remove() {},add() {}},showModal() { this.open = true; }},
   viewerTitle:{}, viewerContent:{}
 };
 const apps = Array.from({length:100}, (_, i) => ({
@@ -51,11 +51,13 @@ assert.match(context.screenCard(screen), /class="pinmeta">Two<\/span>/);
 context.data.screens = [screen];
 apps[0].assetIds = ['screen'];
 context.openApp(apps[0]);
-assert.match(controls.viewerContent.innerHTML, /class="coverage">Two · 1 listing screenshot/);
+assert.match(controls.viewerContent.innerHTML, /class="app-viewer-stage"/);
+assert.match(controls.viewerContent.innerHTML, /class="app-viewer-thumbnails"/);
+assert.match(controls.viewerContent.innerHTML, /class="app-viewer-meta"><span>Two · 1 listing screenshot/);
 context.view('screen');
 assert.equal(context.screenArgs[3], 'Two · App Store listing screenshots');
 controls.category.value = 'Unrelated';
 assert.match(context.screenCard(screen), /class="pinmeta">One<\/span>/);
 context.openApp(legacy[0]);
-assert.match(controls.viewerContent.innerHTML, /class="coverage">Old · 0 listing screenshots/);
+assert.match(controls.viewerContent.innerHTML, /class="app-viewer-meta"><span>Old · 0 listing screenshots/);
 console.log('PASS: selected category labels on screens and app details; 100 overlapping apps in each chart; selected-category rank/order; name sort; search; legacy snapshots; shared screens');
