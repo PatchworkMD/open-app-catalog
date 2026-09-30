@@ -395,6 +395,7 @@ window.addEventListener('hashchange', () => {
   }
   const transition = document.startViewTransition(navigate);
   activeRouteTransition = transition;
+  transition.ready?.catch(() => {});
   transition.finished.then(
     () => { if (activeRouteTransition === transition) activeRouteTransition = null; },
     () => { if (activeRouteTransition === transition) activeRouteTransition = null; }
