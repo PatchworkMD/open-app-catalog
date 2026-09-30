@@ -121,6 +121,36 @@ test('only a verified invitee can accept access and edit saved references', asyn
   await assertFails(deleteDoc(sharedBoardRef));
 });
 
+test('inactive members lose board access and owners cannot demote themselves', async () => {
+  const { db: ownerDb } = await createOwnerBoard();
+  const ownerMemberRef = doc(ownerDb, 'boards/board-a/members/owner');
+  await assertFails(updateDoc(ownerMemberRef, { role:'member' }));
+
+  const inviteRef = doc(ownerDb, 'boards/board-a/invites/invitee@example.com');
+  await assertSucceeds(setDoc(inviteRef, {
+    invitedEmail: 'invitee@example.com',
+    status: 'pending',
+    createdBy: 'owner',
+    createdAt: serverTimestamp()
+  }));
+
+  const inviteeDb = firestore('invitee', 'invitee@example.com');
+  await assertSucceeds(updateDoc(doc(inviteeDb, 'boards/board-a/invites/invitee@example.com'), {
+    status: 'accepted',
+    acceptedBy: 'invitee',
+    acceptedAt: serverTimestamp()
+  }));
+  const inviteeMemberRef = doc(ownerDb, 'boards/board-a/members/invitee');
+  await assertSucceeds(setDoc(inviteeMemberRef, memberData('invitee', 'invitee@example.com', 'member')));
+  const sharedBoardRef = doc(inviteeDb, 'boards/board-a');
+  assert.equal((await assertSucceeds(getDoc(sharedBoardRef))).exists(), true);
+
+  await assertSucceeds(updateDoc(inviteeMemberRef, { status:'inactive' }));
+  await assertFails(getDoc(sharedBoardRef));
+  await assertSucceeds(updateDoc(inviteeMemberRef, { status:'active' }));
+  assert.equal((await assertSucceeds(getDoc(sharedBoardRef))).exists(), true);
+});
+
 test('unverified users cannot create boards, and invites stay private to owner and invitee', async () => {
   const unverifiedDb = firestore('unverified', 'unverified@example.com', false);
   await assertFails(setDoc(
