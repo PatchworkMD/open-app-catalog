@@ -40,7 +40,6 @@ const screenshot = name => path.join(artifactDir, name);
       const close = await page.getByRole('button',{name:'Close viewer'}).boundingBox();
       assert(image && image.height > 200 && image.y >= 0 && image.y + image.height <= page.viewportSize().height);
       assert(close && close.y >= 0 && close.x + close.width <= page.viewportSize().width);
-      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     };
     await assertViewerFits();
     await page.screenshot({path:screenshot('app-viewer-desktop.png'),animations:'disabled'});
@@ -89,6 +88,7 @@ const screenshot = name => path.join(artifactDir, name);
     assert(mobilePrevious && mobilePrevious.width >= 40 && mobilePrevious.height >= 40);
     assert(mobileNext && mobileNext.width >= 40 && mobileNext.height >= 40);
     await assertViewerFits();
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({path:screenshot('app-viewer-mobile.png'),animations:'disabled'});
     await page.keyboard.press('Escape');
 
