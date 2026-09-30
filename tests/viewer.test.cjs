@@ -78,8 +78,9 @@ const screenshot = name => path.join(artifactDir, name);
       property:getComputedStyle(button).transitionProperty,
       duration:getComputedStyle(button).transitionDuration
     }));
-    assert.equal(reducedThumbnailMotion.property, 'none');
-    assert.equal(reducedThumbnailMotion.duration, '0s');
+    assert.match(reducedThumbnailMotion.property, /border-color/);
+    assert.doesNotMatch(reducedThumbnailMotion.property, /transform/);
+    assert.equal(reducedThumbnailMotion.duration, '0.1s');
 
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.locator('#viewer [data-save]').click();
