@@ -42,7 +42,7 @@ function appIcon(x) {
   return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" src="${esc(p)}" loading="eager" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">` : '<div class="icon-ph"></div>';
 }
 function screenCard(s) {
-  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
+  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(displayCategory(s))}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
 }
 function screenIds(ids) {
   const known = new Set((data.screens || []).map(s => s.id));
@@ -59,19 +59,32 @@ function curationCard(x, kind) {
   const openLabel = kind === 'flows' ? 'Open collection' : 'Open screen';
   return `<article class="pin collection-card collection-${kind}"><div class="collection-card-header"><div class="collection-card-copy"><span class="collection-type">${type}</span><h3 class="collection-title">${esc(x.title)}</h3><p class="collection-meta">${appName ? `<strong>${esc(appName)}</strong> · ` : ''}${esc(x.category || 'Curated reference')} · ${detail}</p><p class="collection-description">${esc(x.description || '')}</p></div><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="${openLabel}: ${esc(x.title)}">${openLabel}</button></div><button class="collection-preview-button" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Preview ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s, false, kind === 'elements')}</span>`).join('')}</div></button><div class="pinactions">${actions}</div></article>`;
 }
+function itemCategories(x) {
+  return [...new Set([x.category, ...(x.chartMemberships || []).map(c => c.name), ...(x.categories || [])].filter(Boolean))];
+}
+function displayCategory(x) {
+  const category = $('#category').value;
+  return itemCategories(x).includes(category) ? category : (x.category || 'App Store');
+}
+function appChart(x) {
+  const category = $('#category').value;
+  const membership = (x.chartMemberships || []).find(c => c.name === category);
+  return membership ? {category:membership.name,rank:membership.rank} : {category:x.category,rank:x.chartRank};
+}
 function appCard(x) {
   const shot = data.screens.find(s => (x.assetIds || []).includes(s.id));
-  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(x.chartRank) ? `<span class="pinrank">#${x.chartRank} in ${esc(x.category)}</span>` : '';
-  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(x.category || 'App Store')}</span></button></article>`;
+  const chart = appChart(x);
+  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(chart.rank) ? `<span class="pinrank">#${chart.rank} in ${esc(chart.category)}</span>` : '';
+  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(chart.category || 'App Store')}</span></button></article>`;
 }
 function matchesFilters(x) {
   const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
-  return (!q || [x.name,x.title,x.category,x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || x.category === cat);
+  return (!q || [x.name,x.title,...itemCategories(x),x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || itemCategories(x).includes(cat));
 }
 function filtered(items) {
   const out = items.filter(matchesFilters);
   if ($('#sort').value === 'name') out.sort((a,b) => (a.name || a.title || '').localeCompare(b.name || b.title || ''));
-  else if (data.coverage?.rankBasis === 'original-category-feed') out.sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999));
+  else if (data.coverage?.rankBasis === 'original-category-feed') out.sort((a,b) => (appChart(a).rank ?? 999) - (appChart(b).rank ?? 999));
   return out;
 }
 function currentItems() {
@@ -107,7 +120,7 @@ function mergeCuration(curation) {
   data.elements = [...(data.elements || []), ...elements];
 }
 function docs() {
-  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. An app appearing in multiple categories is kept in the first category encountered.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Your board stays in this browser</h3><p>Saved screenshots and curated flow collections are stored on this device. Export a board to keep a copy or supply it to your agent. There is no account sync. Your agent host's policies apply to anything you share with it.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
+  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. Each app has one record and retains its rank in every fetched category chart. Category filters include overlapping apps. Apple may return fewer than 100 entries, and some entries may lack Lookup metadata; coverage counts record those shortfalls.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Your board stays in this browser</h3><p>Saved screenshots and curated flow collections are stored on this device. Export a board to keep a copy or supply it to your agent. There is no account sync. Your agent host's policies apply to anything you share with it.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
 }
 function pluginDocs() {
   return `<div class="doc"><h2>Review your references.</h2><p>Give your agent screenshots, interface text, source code, or an exported board. Ask for up to three prioritized improvements, each tied to evidence and a way to test it.</p><ol><li>Save useful screenshots to your board.</li><li>Export your references and attach the relevant images or code to your agent.</li><li>Ask: “Use Hugging App to review these references. Cite the evidence and mark unseen states as unverified.”</li></ol><p>The plugin reviews material you supply. It does not automatically browse this catalog or fetch third-party libraries. Your host processes supplied content under its own policies.</p><p><a class="text-link" href="https://github.com/PatchworkMD/app-design-research" target="_blank" rel="noopener noreferrer">Plugin source & installation ↗</a> · <a href="https://chatgpt.com/plugins/plugins_6a9e2172a0608191ad0b9dc952483df3" target="_blank" rel="noopener noreferrer">Open in ChatGPT ↗</a></p><p class="meta">Hugging App · Build &amp; Ship iOS Apps.</p></div>`;
@@ -169,19 +182,14 @@ function view(id, returnAppId = null) {
   const screen = data.screens.find(s => s.id === id); if (!screen) return;
   const app = data.apps.find(a => (a.assetIds || []).includes(id));
   const shots = app ? app.assetIds.map(id => data.screens.find(s => s.id === id)).filter(Boolean) : [screen];
-  const context = app ? `${app.category || 'App Store'} · App Store listing screenshots` : '';
+  const context = app ? `${displayCategory(app)} · App Store listing screenshots` : '';
   openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot', context, returnAppId);
-}
-function displayAppCategory(app) {
-  const selectedCategory = $('#category')?.value;
-  const memberships = (app.chartMemberships || []).map(item => item.name).filter(Boolean);
-  return memberships.includes(selectedCategory) ? selectedCategory : app.category || memberships[0] || 'App Store';
 }
 function renderAppViewer() {
   const {app, shots, index} = viewerState;
   const shot = shots[index];
   const rating = Number.isFinite(app.rating) ? ' · ' + app.rating.toFixed(1) + ' / 5 App Store rating' : '';
-  const appMeta = displayAppCategory(app) + ' · ' + shots.length + ' listing screenshot' + (shots.length === 1 ? '' : 's') + rating;
+  const appMeta = displayCategory(app) + ' · ' + shots.length + ' listing screenshot' + (shots.length === 1 ? '' : 's') + rating;
   const reference = '<a class="app-viewer-reference" href="/apps/' + encodeURIComponent(app.id) + '/">Reference page ↗</a>';
   const identity = '<div class="app-viewer-identity">' + appIcon(app) + '<div class="app-viewer-meta"><span>' + esc(appMeta) + '</span>' + reference + '</div></div>';
   if (!shot) {
@@ -305,7 +313,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   data = d;
   for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
   catalogScreenCount = data.screens.length;
-  const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+  const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].flatMap(itemCategories))].sort();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
   fillHero(); render(); $('#export').disabled = false;
   loadCuration();
@@ -323,7 +331,7 @@ async function loadCuration() {
     if (!curation || !Array.isArray(curation.flows) || !Array.isArray(curation.elements)) throw Error('Invalid reviewed library');
     mergeCuration(curation);
     const category = $('#category').value;
-    const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+    const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].flatMap(itemCategories))].sort();
     $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
     $('#category').value = category;
     curationState = 'ready'; fillHero();

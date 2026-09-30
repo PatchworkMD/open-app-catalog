@@ -45,6 +45,76 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result["coverage"]["chartStore"], "us")
         self.assertEqual(result["coverage"]["chartType"], "topfreeapplications")
 
+    def test_each_overlapping_chart_keeps_100_apps_and_original_ranks(self):
+        ids = [str(i) for i in range(1, 101)]
+        feeds = {"one": ids, "two": list(reversed(ids))}
+        details = {i: {"trackId": i, "trackName": i,
+                       "screenshotUrls": ["shared", i, i]} for i in ids}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", side_effect=lambda genre: feeds[genre]), \
+             patch.object(fetch, "lookup_apps", side_effect=lambda ids: [details[i] for i in reversed(ids)]) as lookup, \
+             patch.object(fetch, "save_screenshot", side_effect=lambda url: {"id": url, "path": f"assets/{url}.png"}) as save, \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+        self.assertEqual(len(result["apps"]), 100)
+        self.assertEqual(len(result["screens"]), 101)
+        lookup.assert_called_once_with(ids)
+        self.assertEqual(save.call_count, 300)
+        for label, ordered_ids in [("One", ids), ("Two", list(reversed(ids)))]:
+            chart = sorted((m["rank"], app["id"]) for app in result["apps"]
+                           for m in app["chartMemberships"] if m["name"] == label)
+            self.assertEqual(chart, list(enumerate(ordered_ids, 1)))
+        for row in result["coverage"]["categoryCoverage"]:
+            self.assertEqual(row["catalogEntries"], 100)
+            self.assertEqual(row["feedShortfall"], 0)
+            self.assertEqual(row["missingMetadataAppIds"], [])
+        for app in result["apps"]:
+            self.assertEqual(len(app["assetIds"]), 2)
+        for screen in result["screens"]:
+            self.assertEqual(screen["categories"], ["One", "Two"])
+
+    def test_short_feeds_and_missing_lookup_are_reported_per_category(self):
+        feeds = {"one": ["a", "missing"], "two": ["missing", "a", "c"]}
+        details = {"a": {"trackId": "a"}, "c": {"trackId": "c"}}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", side_effect=lambda genre: feeds[genre]), \
+             patch.object(fetch, "lookup_apps", side_effect=lambda ids: [details[i] for i in ids if i in details]), \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+        rows = result["coverage"]["categoryCoverage"]
+        self.assertEqual([(r["chartEntries"], r["catalogEntries"], r["feedShortfall"],
+                           r["missingMetadataAppIds"]) for r in rows],
+                         [(2, 1, 98, ["missing"]), (3, 2, 97, ["missing"])])
+        self.assertEqual(result["apps"][0]["chartMemberships"][1]["rank"], 2)
+        self.assertEqual(result["apps"][1]["chartMemberships"][0]["rank"], 3)
+
+    def test_missing_new_metadata_keeps_available_overlap_in_category(self):
+        feeds = {"one": ["a"], "two": ["a", "missing"]}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", side_effect=lambda genre: feeds[genre]), \
+             patch.object(fetch, "lookup_apps", side_effect=[[{"trackId": "a"}], []]), \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+        row = result["coverage"]["categoryCoverage"][1]
+        self.assertEqual(row["catalogEntries"], 1)
+        self.assertEqual(row["missingMetadataAppIds"], ["missing"])
+        self.assertEqual(result["apps"][0]["chartMemberships"][1]["rank"], 1)
+
+    def test_all_metadata_missing_aborts_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", return_value=["missing"]), \
+             patch.object(fetch, "lookup_apps", return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, "No app metadata"):
+                fetch.build()
+
     def test_empty_category_aborts_refresh(self):
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(fetch, "GENRES", {"one": ("One", 1)}), \

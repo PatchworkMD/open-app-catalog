@@ -5,6 +5,7 @@ on:
     paths:
       - 'site/**'
       - 'tests/site.test.cjs'
+      - 'tests/category.test.cjs'
       - 'tests/browser-fixture.cjs'
       - '.github/workflows/ui-tests.yml'
 
@@ -23,12 +24,18 @@ jobs:
       - name: Run catalog browser checks
         env:
           TMPDIR: ${{ runner.temp }}
-        run: node tests/site.test.cjs
+        shell: bash
+        run: |
+          mkdir -p .omo/evidence
+          node --check site/app.js
+          node tests/category.test.cjs 2>&1 | tee .omo/evidence/category-ui-tests.log
+          node tests/site.test.cjs 2>&1 | tee .omo/evidence/browser-tests.log
       - name: Upload browser QA screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: catalog-browser-qa
-          path: ${{ runner.temp }}/hugging-app-qa-*/*.png
-          if-no-files-found: warn
+          path: .omo/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7

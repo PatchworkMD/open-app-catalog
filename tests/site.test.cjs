@@ -2,7 +2,6 @@
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const os = require('node:os');
 const path = require('node:path');
 const {catalogBase} = require('./browser-fixture.cjs');
 (async () => {
@@ -10,7 +9,9 @@ const {catalogBase} = require('./browser-fixture.cjs');
   const page = await browser.newPage({viewport:{width:800,height:600}});
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   const base = await catalogBase(page);
-  const evidence = await fs.mkdtemp(path.join(os.tmpdir(),'hugging-app-qa-'));
+  const evidenceRoot = path.resolve('.omo/evidence');
+  await fs.mkdir(evidenceRoot, {recursive:true});
+  const evidence = await fs.mkdtemp(path.join(evidenceRoot,'hugging-app-qa-'));
   try {
     await page.goto(base + '#apps');
     await page.locator('.app-open').first().waitFor();
@@ -117,6 +118,31 @@ const {catalogBase} = require('./browser-fixture.cjs');
     assert(flowSrcset.includes('/640x1386bb.jpg 2x'),'small collection previews should keep the lighter Retina source');
     assert(!flowSrcset.includes('/1290x2796bb.png'),'small collection previews should not request full-size assets');
     await retinaPage.close();
+
+    const overlap = await browser.newPage({viewport:{width:800,height:600}});
+    overlap.on('pageerror', e => errors.push(e.message));
+    const overlapBase = await catalogBase(overlap);
+    const overlapData = JSON.parse(await fs.readFile(path.join(__dirname,'../site/data.json'),'utf8'));
+    overlapData.apps = overlapData.apps.filter(app => app.assetIds?.length).slice(0,2);
+    assert.equal(overlapData.apps.length,2);
+    overlapData.coverage = {...overlapData.coverage,rankBasis:'original-category-feed'};
+    for (const [i, app] of overlapData.apps.entries()) {
+      app.chartMemberships = [{name:app.category,rank:i + 1},{name:'Integration category',rank:2 - i}];
+    }
+    await overlap.route('**/data.json',route => route.fulfill({status:200,json:overlapData}));
+    await overlap.goto(overlapBase + '#apps');
+    await overlap.locator('.app-open').first().waitFor();
+    await overlap.locator('#category').selectOption({label:'Integration category'});
+    assert.equal(await overlap.locator('.app-open').count(),2);
+    assert.equal(await overlap.locator('.app-open').first().getAttribute('data-related'),overlapData.apps[1].id);
+    assert.equal(await overlap.locator('.pinrank').first().textContent(),'#1 in Integration category');
+    await overlap.locator('.app-open').first().click();
+    await overlap.locator('#viewer.app-viewer').waitFor();
+    assert((await overlap.locator('.app-viewer-meta').textContent()).startsWith('Integration category · '));
+    assert.equal(await overlap.locator('.app-viewer-thumbnails button').count(),overlapData.apps[1].assetIds.length);
+    await overlap.screenshot({path:path.join(evidence,'app-viewer-secondary-category.png')});
+    await overlap.close();
+
 
     await page.setViewportSize({width:390,height:844});
     await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
