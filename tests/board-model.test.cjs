@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {normalizeBoard, uniqueIds, applySetDelta, invitationDecision, reconcileCloudBoard, hasPendingSync} = require('../site/board-model.js');
+const {normalizeBoard, uniqueIds, activeMemberships, applySetDelta, invitationDecision, reconcileCloudBoard, hasPendingSync} = require('../site/board-model.js');
 
 test('normalizes local and cloud board identity without changing saved references', () => {
   const board = normalizeBoard({
@@ -17,6 +17,14 @@ test('normalizes local and cloud board identity without changing saved reference
 
 test('filters invalid ids and enforces the requested bound', () => {
   assert.deepEqual(uniqueIds(['a', '', 4, 'a', 'b', 'c'], 2), ['a', 'b']);
+});
+
+test('inactive memberships do not block active boards from loading', () => {
+  const memberships = activeMemberships([
+    {status:'inactive', boardId:'revoked-board'},
+    {status:'active', boardId:'shared-board'}
+  ]);
+  assert.deepEqual(memberships.map(membership => membership.boardId), ['shared-board']);
 });
 
 test('preserves all supported collection ids across cloud round trips', () => {
