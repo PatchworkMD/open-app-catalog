@@ -1,0 +1,41 @@
+name: Verify catalog pipeline
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-pipeline.yml"
+      - "pipeline/**"
+      - "site/data.json"
+      - "site/curation.json"
+      - "site/app.js"
+      - "tests/category.test.cjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test catalog pipeline and category behavior
+        shell: bash
+        run: |
+          mkdir -p .omo/evidence
+          python3 -m unittest discover -v -s pipeline -p 'test_*.py' 2>&1 | tee .omo/evidence/pipeline-tests.log
+          node --check site/app.js
+          node tests/category.test.cjs 2>&1 | tee .omo/evidence/category-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalog-verification
+          path: .omo/evidence/
+          include-hidden-files: true
+          if-no-files-found: error

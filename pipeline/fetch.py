@@ -139,7 +139,9 @@ def build() -> dict:
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     apps: list[dict] = []
     screens: list[dict] = []
-    seen_ids: set[str] = set()
+    apps_by_id: dict[str, dict] = {}
+    looked_up_ids: set[str] = set()
+    screens_by_id: dict[str, dict] = {}
     category_coverage: list[dict] = []
 
     for genre_id, (label, _arpu) in GENRES.items():
@@ -147,54 +149,73 @@ def build() -> dict:
         feed_ids = fetch_chart_ids(genre_id)[:CHART_LIMIT]
         if not feed_ids:
             raise RuntimeError(f"Empty chart for {label}; preserving previous catalog")
-        category_coverage.append({"id": genre_id, "name": label, "chartEntries": len(feed_ids), "target": CHART_LIMIT})
-        rank_by_id = {app_id: rank + 1 for rank, app_id in enumerate(feed_ids)}
-        chart_ids = [i for i in feed_ids if i not in seen_ids]
-        seen_ids.update(chart_ids)
-        if not chart_ids:
-            continue
-        details = lookup_apps(chart_ids)
-        if not details:
-            raise RuntimeError(f"No app metadata for {label}; preserving previous catalog")
+        rank_by_id = {}
+        for rank, app_id in enumerate(feed_ids, 1):
+            rank_by_id.setdefault(app_id, rank)
+        chart_ids = [i for i in rank_by_id if i not in looked_up_ids]
+        looked_up_ids.update(chart_ids)
+        details = lookup_apps(chart_ids) if chart_ids else []
         for d in details:
             app_id = str(d.get("trackId", ""))
-            if not app_id:
+            if app_id not in chart_ids or app_id in apps_by_id:
                 continue
-            rank = rank_by_id.get(app_id, CHART_LIMIT)
+            rank = rank_by_id[app_id]
             asset_ids = []
             for shot_url in (d.get("screenshotUrls") or [])[:SCREENSHOTS_PER_APP]:
                 saved = save_screenshot(shot_url)
                 if not saved:
                     continue
-                asset_ids.append(saved["id"])
-                screens.append(
-                    {
+                if saved["id"] not in asset_ids:
+                    asset_ids.append(saved["id"])
+                if saved["id"] not in screens_by_id:
+                    screen = {
                         "id": saved["id"],
                         "title": d.get("trackName", "Screen reference"),
                         "category": label,
+                        "categories": [],
                         "kind": "image",
                         "path": saved["path"],
                         "fullSizeUrl": saved.get("fullSizeUrl"),
                         "sourceUrl": d.get("trackViewUrl"),
                     }
-                )
+                    screens.append(screen)
+                    screens_by_id[saved["id"]] = screen
             icon_url = d.get("artworkUrl512") or d.get("artworkUrl100") or d.get("artworkUrl60")
             saved_icon = save_image(icon_url) if icon_url else None
-            apps.append(
-                {
+            app = {
                     "id": app_id,
                     "name": d.get("trackName", "Unknown"),
                     "nameBasis": "App Store Lookup API",
                     "url": d.get("trackViewUrl"),
                     "category": label,
                     "chartRank": rank,
+                    "chartMemberships": [],
                     "rating": d.get("averageUserRating"),
                     "ratingCount": d.get("userRatingCount"),
                     "assetIds": asset_ids,
                     "iconPath": saved_icon["path"] if saved_icon else None,
                     "revenueLabel": estimate_revenue(rank, label),
                 }
-            )
+            apps.append(app)
+            apps_by_id[app_id] = app
+        for app_id, rank in rank_by_id.items():
+            app = apps_by_id.get(app_id)
+            if not app:
+                continue
+            app["chartMemberships"].append({"id": genre_id, "name": label, "rank": rank})
+            for asset_id in app["assetIds"]:
+                categories = screens_by_id[asset_id]["categories"]
+                if label not in categories:
+                    categories.append(label)
+        missing = [i for i in rank_by_id if i not in apps_by_id]
+        if len(missing) == len(rank_by_id):
+            raise RuntimeError(f"No app metadata for {label}; preserving previous catalog")
+        category_coverage.append({
+            "id": genre_id, "name": label, "chartEntries": len(feed_ids),
+            "target": CHART_LIMIT, "feedShortfall": CHART_LIMIT - len(feed_ids),
+            "catalogEntries": len(rank_by_id) - len(missing),
+            "missingMetadataAppIds": missing,
+        })
         time.sleep(1)
 
     coverage = {
