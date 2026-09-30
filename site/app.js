@@ -8,11 +8,13 @@ try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.
 try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
 const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
-function media(s, fullSize = false) {
+function media(s, fullSize = false, sharpPreview = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
   const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
+  const small = full.replace('/1290x2796bb.png', '/640x1386bb.jpg');
+  const retina = sharpPreview ? full : small;
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full)} 2x"` : ''} data-preview="${esc(p)}" loading="${fullSize ? 'eager' : 'lazy'}" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && retina ? `srcset="${esc(p)} 1x, ${esc(retina)} 2x"` : ''} data-preview="${esc(p)}" loading="${fullSize ? 'eager' : 'lazy'}" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
 function handleMediaLoad(image) {
   image.classList.add('loaded');
@@ -55,7 +57,7 @@ function curationCard(x, kind) {
   const detail = kind === 'flows' ? shots.length + ' screenshots · order unverified' : (shots.length ? '1 screenshot · visual review' : 'No screenshot available');
   const actions = kind === 'flows' ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${isSaved}">${isSaved ? 'Saved' : 'Save collection'}</button>` : ids.map(id => `<button data-save="${esc(id)}" aria-pressed="${board.includes(id)}">${board.includes(id) ? 'Saved' : 'Save'}</button><button data-select="${esc(id)}" aria-pressed="${selected.has(id)}">${selected.has(id) ? 'Selected' : 'Compare'}</button>`).join('');
   const openLabel = kind === 'flows' ? 'Open collection' : 'Open screen';
-  return `<article class="pin collection-card collection-${kind}"><div class="collection-card-header"><div class="collection-card-copy"><span class="collection-type">${type}</span><h3 class="collection-title">${esc(x.title)}</h3><p class="collection-meta">${appName ? `<strong>${esc(appName)}</strong> · ` : ''}${esc(x.category || 'Curated reference')} · ${detail}</p><p class="collection-description">${esc(x.description || '')}</p></div><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="${openLabel}: ${esc(x.title)}">${openLabel}</button></div><button class="collection-preview-button" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Preview ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s)}</span>`).join('')}</div></button><div class="pinactions">${actions}</div></article>`;
+  return `<article class="pin collection-card collection-${kind}"><div class="collection-card-header"><div class="collection-card-copy"><span class="collection-type">${type}</span><h3 class="collection-title">${esc(x.title)}</h3><p class="collection-meta">${appName ? `<strong>${esc(appName)}</strong> · ` : ''}${esc(x.category || 'Curated reference')} · ${detail}</p><p class="collection-description">${esc(x.description || '')}</p></div><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="${openLabel}: ${esc(x.title)}">${openLabel}</button></div><button class="collection-preview-button" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Preview ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s, false, kind === 'elements')}</span>`).join('')}</div></button><div class="pinactions">${actions}</div></article>`;
 }
 function appCard(x) {
   const shot = data.screens.find(s => (x.assetIds || []).includes(s.id));
