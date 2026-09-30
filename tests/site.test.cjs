@@ -127,13 +127,18 @@ const {catalogBase} = require('./browser-fixture.cjs');
       window.__unhandledTransitions = [];
       window.addEventListener('unhandledrejection', event => window.__unhandledTransitions.push(String(event.reason)));
       document.startViewTransition = callback => {
-        let rejectReady;
+        let rejectReady, resolveFinished;
         const ready = new Promise((_, reject) => { rejectReady = reject; });
+        const finished = new Promise(resolve => { resolveFinished = resolve; });
         const transition = {
           ready,
-          finished:Promise.resolve(),
+          finished,
           skipped:false,
-          skipTransition() { this.skipped = true; rejectReady(new Error('Transition was skipped. New ViewTransition started')); }
+          skipTransition() {
+            this.skipped = true;
+            rejectReady(new Error('Transition was skipped. New ViewTransition started'));
+            resolveFinished();
+          }
         };
         window.__viewTransitions.push(transition);
         callback();
