@@ -92,6 +92,20 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result["apps"][0]["chartMemberships"][1]["rank"], 2)
         self.assertEqual(result["apps"][1]["chartMemberships"][0]["rank"], 3)
 
+    def test_missing_new_metadata_keeps_available_overlap_in_category(self):
+        feeds = {"one": ["a"], "two": ["a", "missing"]}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", side_effect=lambda genre: feeds[genre]), \
+             patch.object(fetch, "lookup_apps", side_effect=[[{"trackId": "a"}], []]), \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+        row = result["coverage"]["categoryCoverage"][1]
+        self.assertEqual(row["catalogEntries"], 1)
+        self.assertEqual(row["missingMetadataAppIds"], ["missing"])
+        self.assertEqual(result["apps"][0]["chartMemberships"][1]["rank"], 1)
+
     def test_all_metadata_missing_aborts_refresh(self):
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
