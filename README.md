@@ -53,11 +53,50 @@ Check the Actions run and the public snapshot date. The companion plugin is Hugg
 
 ## Design research
 
-Browse apps or screens, select up to four screenshots to compare, and save a
-board in this browser. Exports include the currently filtered references and
-the snapshot metadata. The companion [Hugging App plugin](https://github.com/PatchworkMD/app-design-research)
+Browse apps or screens, select up to four screenshots to compare, and save one
+or more boards on this device. Choose a board from the Saved board page.
+Exports include the currently filtered references and the snapshot metadata.
+The companion [Hugging App plugin](https://github.com/PatchworkMD/app-design-research)
 reviews supplied evidence; it does not fetch this catalog automatically.
 Existing saved-board keys and plugin identifiers are preserved.
+
+### Accounts and shared boards
+
+Accounts and shared boards use the separate Firebase project
+`patchworkmd-hugging-app-prod`. The current public build keeps cloud sync off
+until an owner completes Firebase setup. Local boards keep working without an
+account. When configured, Google and email sign-in require verified email
+before board access. Boards start private; owners invite collaborators by email.
+Hugging App records the invite but does not send email. Owners must notify the
+invited person outside the app.
+
+To finish setup, an owner must first create the dedicated Firebase project
+with ID `patchworkmd-hugging-app-prod` in the [Firebase Console](https://console.firebase.google.com/).
+Accept Firebase's terms if prompted. Then register a web app, enable Google and
+Email/Password sign-in, add `catalog.patchworkmd.dev` to Firebase
+Authentication's authorized domains, and create the Firestore database.
+
+Copy the web app config into `site/firebase-config.json`, but keep
+`enabled: false` while preparing Firebase. This client config is public browser
+data; never put a service-account key or other private credential in the site.
+After a separately authorized review, deploy both `firestore.rules` and
+`firestore.indexes.json` with
+`firebase deploy --project patchworkmd-hugging-app-prod --only firestore`.
+In the Firebase Console, wait until creation finishes for the boards
+composite index and the invites and members collection-group indexes, then
+confirm each is enabled and usable. Index creation is asynchronous. Only after
+every required index is usable may a separately authorized site update set
+`enabled: true`. Emulator tests do not prove that live indexes exist or are
+ready. The GitHub catalog workflow bundles the pinned
+Firebase SDK before deploying the site.
+
+Index formats and collection-group query requirements are documented in the
+[Firebase index definition reference](https://firebase.google.com/docs/reference/firestore/indexes)
+and [Firestore index overview](https://firebase.google.com/docs/firestore/query-data/index-overview).
+
+Firebase activation adds Firebase services to the existing Google Cloud
+project and cannot be undone. The account UI remains in local-only mode until
+the Console setup and public client config are complete.
 
 Category ranks are shown only for datasets produced with the corrected
 original-feed rank marker. Older snapshots retain their data without displaying
@@ -158,7 +197,7 @@ The importer retains up to ten available iPhone listing screenshots per app, rec
 
 To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
 
-Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. Accounts, cloud board sync, and shared boards are not implemented in the current static catalog.
+Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. The account UI is implemented, but sign-in and cloud sync remain off until the Firebase setup above is complete.
 
 ### Screenshot resolution
 
