@@ -130,7 +130,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
         const transition = {
           finished,
           skipped:false,
-          skip() { this.skipped = true; rejectFinished(new Error('Transition was skipped. New ViewTransition started')); }
+          skipTransition() { this.skipped = true; rejectFinished(new Error('Transition was skipped. New ViewTransition started')); }
         };
         window.__viewTransitions.push(transition);
         callback();
@@ -150,6 +150,26 @@ const {catalogBase} = require('./browser-fixture.cjs');
     })),{count:1,skipped:true});
     assert.deepEqual(transitionErrors,[]);
     await transitionPage.close();
+
+    const chromiumTransitionErrors = [];
+    const chromiumTransitionPage = await browser.newPage({viewport:{width:1280,height:900}});
+    chromiumTransitionPage.on('pageerror', error => chromiumTransitionErrors.push(error.message));
+    const chromiumBase = await catalogBase(chromiumTransitionPage);
+    await chromiumTransitionPage.goto(chromiumBase + '#apps');
+    await chromiumTransitionPage.locator('.app-open').first().waitFor();
+    assert.equal(await chromiumTransitionPage.evaluate(() =>
+      typeof document.startViewTransition === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    ),true,'Chromium View Transitions should be enabled for this scenario');
+    await chromiumTransitionPage.addStyleTag({content:'::view-transition-old(root),::view-transition-new(root){animation-duration:2s!important}'});
+    await chromiumTransitionPage.evaluate(() => { location.hash = '#screens'; });
+    await chromiumTransitionPage.waitForFunction(() => document.querySelector('#title').textContent === 'Screens');
+    await chromiumTransitionPage.evaluate(async () => {
+      await new Promise(resolve => setTimeout(resolve,0));
+      location.hash = '#flows';
+    });
+    await chromiumTransitionPage.waitForFunction(() => document.querySelector('#title').textContent === 'Flows');
+    assert.deepEqual(chromiumTransitionErrors,[]);
+    await chromiumTransitionPage.close();
     const blocked = await browser.newPage();
     await catalogBase(blocked);
     await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));
