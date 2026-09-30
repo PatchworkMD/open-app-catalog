@@ -142,12 +142,13 @@ test('inactive members lose board access and owners cannot demote themselves', a
   }));
   const inviteeMemberRef = doc(inviteeDb, 'boards/board-a/members/invitee');
   await assertSucceeds(setDoc(inviteeMemberRef, memberData('invitee', 'invitee@example.com', 'member')));
+  const ownerInviteeMemberRef = doc(ownerDb, 'boards/board-a/members/invitee');
   const sharedBoardRef = doc(inviteeDb, 'boards/board-a');
   assert.equal((await assertSucceeds(getDoc(sharedBoardRef))).exists(), true);
 
-  await assertSucceeds(updateDoc(inviteeMemberRef, { status:'inactive' }));
+  await assertSucceeds(updateDoc(ownerInviteeMemberRef, { status:'inactive' }));
   await assertFails(getDoc(sharedBoardRef));
-  await assertSucceeds(updateDoc(inviteeMemberRef, { status:'active' }));
+  await assertSucceeds(updateDoc(ownerInviteeMemberRef, { status:'active' }));
   assert.equal((await assertSucceeds(getDoc(sharedBoardRef))).exists(), true);
 });
 
