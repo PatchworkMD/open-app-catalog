@@ -11,6 +11,7 @@ on:
       - "worker/**"
       - "firebase.json"
       - "firestore.rules"
+      - "firestore.indexes.json"
       - "wrangler.jsonc"
   push:
     branches: [master]
@@ -22,6 +23,7 @@ on:
       - "worker/**"
       - "firebase.json"
       - "firestore.rules"
+      - "firestore.indexes.json"
       - "wrangler.jsonc"
 
 permissions:
