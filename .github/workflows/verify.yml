@@ -53,8 +53,6 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test Firestore rules in a demo-project emulator
         run: npx firebase-tools emulators:exec --only firestore --project demo-hugging-app-rules "node --test tests/firestore-rules.test.mjs"
-      - name: Test catalog pipeline
-        run: python3 -m unittest discover -s pipeline -p 'test_*.py'
       - name: Test board model and browser flows
         env:
           PLAYWRIGHT_CHANNEL: chromium
@@ -62,6 +60,8 @@ jobs:
         run: |
           node tests/board-model.test.cjs
           node tests/site.test.cjs
+      - name: Test catalog pipeline
+        run: python3 -m unittest discover -s pipeline -p 'test_*.py'
       - name: Check JavaScript and Firebase configuration
         run: |
           node --check site/app.js
