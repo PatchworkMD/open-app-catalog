@@ -33,6 +33,10 @@
     };
   }
 
+  function activeMemberships(values) {
+    return Array.isArray(values) ? values.filter(value => value && value.status === 'active') : [];
+  }
+
   function applySetDelta(current, base, desired) {
     const currentSet = new Set(uniqueIds(current, 5000));
     const baseSet = new Set(uniqueIds(base, 5000));
@@ -72,5 +76,5 @@
     return !sameSet(board.appIds, board.syncBaseAppIds) || !sameSet(board.collectionIds, board.syncBaseCollectionIds);
   }
 
-  return {normalizeBoard, uniqueIds, applySetDelta, invitationDecision, reconcileCloudBoard, hasPendingSync};
+  return {normalizeBoard, uniqueIds, activeMemberships, applySetDelta, invitationDecision, reconcileCloudBoard, hasPendingSync};
 });
