@@ -40,7 +40,7 @@ function appIcon(x) {
   return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" src="${esc(p)}" loading="eager" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">` : '<div class="icon-ph"></div>';
 }
 function screenCard(s) {
-  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
+  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(displayCategory(s))}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
 }
 function screenIds(ids) {
   const known = new Set((data.screens || []).map(s => s.id));
@@ -55,6 +55,10 @@ function curationCard(x, kind) {
 }
 function itemCategories(x) {
   return [...new Set([x.category, ...(x.chartMemberships || []).map(c => c.name), ...(x.categories || [])].filter(Boolean))];
+}
+function displayCategory(x) {
+  const category = $('#category').value;
+  return itemCategories(x).includes(category) ? category : (x.category || 'App Store');
 }
 function appChart(x) {
   const category = $('#category').value;
@@ -173,7 +177,7 @@ function view(id, returnAppId = null) {
   const screen = data.screens.find(s => s.id === id); if (!screen) return;
   const app = data.apps.find(a => (a.assetIds || []).includes(id));
   const shots = app ? app.assetIds.map(id => data.screens.find(s => s.id === id)).filter(Boolean) : [screen];
-  const context = app ? `${app.category || 'App Store'} · App Store listing screenshots` : '';
+  const context = app ? `${displayCategory(app)} · App Store listing screenshots` : '';
   openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot', context, returnAppId);
 }
 function openApp(app, focusScreenId = null) {
@@ -183,7 +187,7 @@ function openApp(app, focusScreenId = null) {
   $('#viewerTitle').textContent = app.name;
   const links = [sourceLink(app.url), `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>`].filter(Boolean).join(' · ');
   const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
-  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(app.category || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
+  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(displayCategory(app))} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
   const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
   $('#viewerContent').innerHTML = summary + gallery;
   if (!$('#viewer').open) $('#viewer').showModal();
