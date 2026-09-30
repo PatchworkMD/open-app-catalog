@@ -12,11 +12,16 @@ const {catalogBase}=require('./browser-fixture.cjs');
   assert((await images.count())>=2,'the current catalog should show at least two app images');
   for(let index=0;index<2;index++){
    const img=images.nth(index);
-   assert.equal(await img.getAttribute('loading'),'eager');
+   assert.equal(await img.getAttribute('loading'),'lazy');
    await img.evaluate(e=>e.decode());
    assert(await img.evaluate(e=>e.naturalWidth>0&&e.classList.contains('loaded')));
   }
   const src=await images.first().getAttribute('src');
+  await page.locator('.app-open').first().click();
+  const viewerImage=page.locator('.app-viewer-canvas img');
+  await viewerImage.waitFor({state:'visible'});
+  assert.equal(await viewerImage.getAttribute('loading'),'eager');
+  await page.keyboard.press('Escape');
   const stalled=await browser.newPage();await catalogBase(stalled);let release, intercepted;
   const gate=new Promise(r=>release=r);
   const requestSeen=new Promise(r=>intercepted=r);
@@ -30,6 +35,6 @@ const {catalogBase}=require('./browser-fixture.cjs');
   assert.match(await card.locator('.pinmedia').evaluate(e=>getComputedStyle(e,'::after').content),/Loading image/);
   release();
   await card.locator('.media-unavailable').waitFor();
-  console.log('PASS: reported blank cards decode eagerly; stalled and failed images show explicit states');
+  console.log('PASS: catalog previews load lazily, viewer media loads eagerly, and stalled or failed images show explicit states');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});
