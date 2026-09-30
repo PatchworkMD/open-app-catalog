@@ -12,7 +12,7 @@ function media(s, fullSize = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
   const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full)} 2x"` : ''} data-preview="${esc(p)}" loading="${fullSize ? 'eager' : 'lazy'}" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
 function handleMediaLoad(image) {
   image.classList.add('loaded');
