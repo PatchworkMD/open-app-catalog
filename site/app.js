@@ -384,10 +384,21 @@ $('#shareBoard').onclick = () => {
   window.dispatchEvent(new CustomEvent('hugging:share-board-request', {detail:{board:cloneBoard(activeBoardRecord())}}));
 };
 ['search','category','kind','sort'].forEach(id => $('#' + id).addEventListener('input', () => { limit = 48; render(); }));
+let activeRouteTransition = null;
 window.addEventListener('hashchange', () => {
   const navigate = () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); };
-  if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(navigate);
-  else navigate();
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { navigate(); return; }
+  if (activeRouteTransition) {
+    activeRouteTransition.skip();
+    navigate();
+    return;
+  }
+  const transition = document.startViewTransition(navigate);
+  activeRouteTransition = transition;
+  transition.finished.then(
+    () => { if (activeRouteTransition === transition) activeRouteTransition = null; },
+    () => { if (activeRouteTransition === transition) activeRouteTransition = null; }
+  );
 });
 $('#export').onclick = () => {
   if (!data || ['agents','plugin'].includes(route())) return;
