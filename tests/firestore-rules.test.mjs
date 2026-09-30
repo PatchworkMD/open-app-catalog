@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { after, before, beforeEach, test } from 'node:test';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, deleteDoc, where } from 'firebase/firestore';
 
 const projectId = 'demo-hugging-app-rules';
 let testEnv;
@@ -150,6 +150,48 @@ test('inactive members lose board access and owners cannot demote themselves', a
   await assertFails(getDoc(sharedBoardRef));
   await assertSucceeds(updateDoc(ownerInviteeMemberRef, { status:'active' }));
   assert.equal((await assertSucceeds(getDoc(sharedBoardRef))).exists(), true);
+});
+
+test('inactive membership does not block an invitee from loading another active board', async () => {
+  const { db: ownerDb } = await createOwnerBoard();
+  await assertSucceeds(setDoc(doc(ownerDb, 'boards/board-b'), boardData('owner', 'local-board-b')));
+  await assertSucceeds(setDoc(
+    doc(ownerDb, 'boards/board-b/members/owner'),
+    memberData('owner', 'owner@example.com', 'owner')
+  ));
+
+  const inviteeDb = firestore('invitee', 'invitee@example.com');
+  for (const boardId of ['board-a', 'board-b']) {
+    const inviteRef = doc(ownerDb, 'boards', boardId, 'invites/invitee@example.com');
+    await assertSucceeds(setDoc(inviteRef, {
+      invitedEmail: 'invitee@example.com',
+      status: 'pending',
+      createdBy: 'owner',
+      createdAt: serverTimestamp()
+    }));
+    await assertSucceeds(updateDoc(doc(inviteeDb, 'boards', boardId, 'invites/invitee@example.com'), {
+      status: 'accepted',
+      acceptedBy: 'invitee',
+      acceptedAt: serverTimestamp()
+    }));
+    await assertSucceeds(setDoc(
+      doc(inviteeDb, 'boards', boardId, 'members/invitee'),
+      memberData('invitee', 'invitee@example.com', 'member')
+    ));
+  }
+
+  await assertSucceeds(updateDoc(doc(ownerDb, 'boards/board-b/members/invitee'), { status:'inactive' }));
+  const memberships = await assertSucceeds(getDocs(query(
+    collectionGroup(inviteeDb, 'members'),
+    where('uid', '==', 'invitee')
+  )));
+  assert.equal(memberships.size, 2);
+  assert.deepEqual(
+    new Set(memberships.docs.map(member => member.ref.parent.parent.id)),
+    new Set(['board-a', 'board-b'])
+  );
+  assert.equal((await assertSucceeds(getDoc(doc(inviteeDb, 'boards/board-a')))).exists(), true);
+  await assertFails(getDoc(doc(inviteeDb, 'boards/board-b')));
 });
 
 test('unverified users cannot create boards, and invites stay private to owner and invitee', async () => {
