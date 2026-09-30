@@ -60,8 +60,6 @@ jobs:
         run: |
           node tests/board-model.test.cjs
           node tests/site.test.cjs
-      - name: Test catalog pipeline
-        run: python3 -m unittest discover -s pipeline -p 'test_*.py'
       - name: Check JavaScript and Firebase configuration
         run: |
           node --check site/app.js
@@ -74,6 +72,8 @@ jobs:
         run: |
           npx esbuild site/firebase-client.entry.js --bundle --platform=browser --format=esm --outfile=/tmp/firebase-client.bundle.js
           npx wrangler deploy --dry-run
+      - name: Test catalog pipeline
+        run: python3 -m unittest discover -s pipeline -p 'test_*.py'
       - name: Upload browser QA screenshots
         if: always()
         uses: actions/upload-artifact@v4
