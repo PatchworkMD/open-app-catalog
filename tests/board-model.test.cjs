@@ -2,6 +2,37 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {normalizeBoard, uniqueIds, activeMemberships, applySetDelta, invitationDecision, reconcileCloudBoard, hasPendingSync} = require('../site/board-model.js');
 
+const firebaseConfig = require('../firebase.json');
+const firestoreIndexes = require('../firestore.indexes.json');
+const accountSyncSource = require('node:fs').readFileSync(require.resolve('../site/account-sync.js'), 'utf8');
+
+test('Firebase indexes cover every filtered account query shape', () => {
+  assert.equal(firebaseConfig.firestore.indexes, 'firestore.indexes.json');
+
+  const boardIndex = firestoreIndexes.indexes.find(index =>
+    index.collectionGroup === 'boards' && index.queryScope === 'COLLECTION'
+  );
+  assert.deepEqual(boardIndex?.fields, [
+    {fieldPath:'ownerUid', order:'ASCENDING'},
+    {fieldPath:'localId', order:'ASCENDING'}
+  ]);
+
+  for (const [collectionGroup, fieldPath] of [['invites', 'invitedEmail'], ['members', 'uid']]) {
+    const override = firestoreIndexes.fieldOverrides.find(index =>
+      index.collectionGroup === collectionGroup && index.fieldPath === fieldPath
+    );
+    assert.deepEqual(
+      new Set(override?.indexes.map(index => `${index.queryScope}:${index.order}`)),
+      new Set(['COLLECTION:ASCENDING', 'COLLECTION:DESCENDING', 'COLLECTION_GROUP:ASCENDING'])
+    );
+  }
+
+  assert.match(accountSyncSource, /query\\(collection\\(client\\.db, COLLECTIONS\\.boards\\),\\s*where\\('ownerUid', '==', user\\.uid\\),\\s*where\\('localId', '==', (?:boardId|localBoardId)\\)\\)/s);
+  assert.match(accountSyncSource, /query\\(collectionGroup\\(client\\.db, COLLECTIONS\\.invites\\),\\s*where\\('invitedEmail', '==', email\\)\\)/s);
+  assert.match(accountSyncSource, /query\\(collectionGroup\\(client\\.db, COLLECTIONS\\.members\\),\\s*where\\('uid', '==', user\\.uid\\)\\)/s);
+  assert.match(accountSyncSource, /query\\(collection\\(client\\.db, COLLECTIONS\\.boards\\),\\s*where\\('ownerUid', '==', user\\.uid\\)\\)/s);
+});
+
 test('normalizes local and cloud board identity without changing saved references', () => {
   const board = normalizeBoard({
     id:'cloud-1', localId:'local-1', cloudId:'cloud-1', name:'  Studio  ',
