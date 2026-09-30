@@ -3,16 +3,122 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
 let viewerState = null, curationState = 'loading', resolutionMap = {};
-let data, catalogScreenCount = 0, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
-try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
-try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
+const boardModel = window.HuggingBoardModel;
+let data, catalogScreenCount = 0, limit = 48, selected = new Set(), boardRecords = [], activeBoardId = '', board = [], savedCollections = [], storageWarning = '';
+function readStoredJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
+function makeLocalBoard(name = 'Saved board', appIds = [], collectionIds = []) {
+  const id = `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  return boardModel.normalizeBoard({id, localId:id, name, appIds, collectionIds});
+}
+function loadBoardRecords() {
+  const stored = readStoredJson('oac-boards-v1', []);
+  if (Array.isArray(stored)) {
+    const normalized = stored.filter(x => x && typeof x === 'object').map(x => boardModel.normalizeBoard(x));
+    if (normalized.length) return normalized;
+  }
+  const legacyApps = readStoredJson('oac-board', []);
+  const legacyCollections = readStoredJson('oac-board-collections', []);
+  return [makeLocalBoard('Saved board', legacyApps, legacyCollections)];
+}
+boardRecords = loadBoardRecords();
+try { activeBoardId = localStorage.getItem('oac-active-board') || ''; } catch {}
+if (!boardRecords.some(x => x.id === activeBoardId)) activeBoardId = boardRecords[0].id;
+function activeBoardRecord() { return boardRecords.find(x => x.id === activeBoardId) || boardRecords[0]; }
+function cloneBoard(value) { return boardModel.normalizeBoard(value); }
+board = [...activeBoardRecord().appIds];
+savedCollections = [...activeBoardRecord().collectionIds];
+function persistBoard({notify = true} = {}) {
+  const current = activeBoardRecord();
+  if (!current) return;
+  current.appIds = boardModel.uniqueIds(board, 5000);
+  current.collectionIds = boardModel.uniqueIds(savedCollections, 1000);
+  current.updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem('oac-boards-v1', JSON.stringify(boardRecords));
+    localStorage.setItem('oac-active-board', current.id);
+    localStorage.setItem('oac-board', JSON.stringify(board));
+    localStorage.setItem('oac-board-collections', JSON.stringify(savedCollections));
+    storageWarning = '';
+  } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+  if (notify) window.dispatchEvent(new CustomEvent('hugging:board-change', {detail:{board:cloneBoard(current)}}));
+}
+function activateBoard(id) {
+  const next = boardRecords.find(x => x.id === id);
+  if (!next) return false;
+  activeBoardId = next.id;
+  board = [...next.appIds]; savedCollections = [...next.collectionIds];
+  persistBoard({notify:false});
+  syncActions(); render();
+  window.dispatchEvent(new CustomEvent('hugging:board-select', {detail:{board:cloneBoard(next)}}));
+  return true;
+}
+function renderBoardToolbar() {
+  const toolbar = $('#boardToolbar');
+  if (!toolbar) return;
+  toolbar.hidden = route() !== 'boards';
+  if (toolbar.hidden) return;
+  const select = $('#boardSelect');
+  select.innerHTML = boardRecords.map(x => `<option value="${esc(x.id)}">${esc(x.name)}${x.ownerUid ? ' · synced' : ' · this device'}</option>`).join('');
+  select.value = activeBoardId;
+}
+window.huggingApp = {
+  getBoards: () => boardRecords.map(cloneBoard),
+  getActiveBoard: () => cloneBoard(activeBoardRecord()),
+  selectBoard: activateBoard,
+  setCloudBoard(localId, remoteRecord) {
+    const existing = boardRecords.find(x => x.id === localId || x.localId === localId || x.id === remoteRecord.id || x.cloudId === remoteRecord.id);
+    const record = boardModel.reconcileCloudBoard(existing, remoteRecord);
+    record.localId = localId || record.localId;
+    record.cloudId = record.cloudId || record.id;
+    const index = boardRecords.findIndex(x => x.id === localId || x.localId === localId || x.id === record.id || x.cloudId === record.id);
+    if (index < 0) boardRecords.push(record); else boardRecords[index] = record;
+    if (activeBoardId === localId || activeBoardId === record.localId || activeBoardId === record.id || activeBoardRecord()?.cloudId === record.id) {
+      activeBoardId = record.id; board = [...record.appIds]; savedCollections = [...record.collectionIds];
+      persistBoard({notify:false});
+    } else try { localStorage.setItem('oac-boards-v1', JSON.stringify(boardRecords)); } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    renderBoardToolbar(); render();
+    return cloneBoard(record);
+  },
+  setCloudBoards(remoteRecords, user) {
+    const incoming = Array.isArray(remoteRecords) ? remoteRecords.map(x => boardModel.normalizeBoard(x)) : [];
+    const cloud = incoming.map(remote => {
+      const existing = boardRecords.find(x =>
+        (x.ownerUid && x.ownerUid === remote.ownerUid && (x.id === remote.id || x.cloudId === remote.id || x.localId === remote.localId)) ||
+        (!x.ownerUid && (x.id === remote.localId || x.localId === remote.localId))
+      );
+      return boardModel.reconcileCloudBoard(existing, remote);
+    });
+    const active = activeBoardRecord();
+    const matchingCloud = cloud.find(x => x.localId === active.id || x.id === active.cloudId);
+    const cloudLocalIds = new Set(cloud.map(x => x.localId));
+    const local = boardRecords.filter(x => !x.ownerUid && !cloudLocalIds.has(x.id));
+    boardRecords = [...local, ...cloud.filter(x => !local.some(y => y.id === x.id || y.id === x.localId))];
+    if (matchingCloud) activeBoardId = matchingCloud.id;
+    else if (!boardRecords.some(x => x.id === activeBoardId)) activeBoardId = cloud.find(x => x.ownerUid === user?.uid)?.id || boardRecords[0]?.id || '';
+    if (!activeBoardId) { const first = makeLocalBoard(); boardRecords.push(first); activeBoardId = first.id; }
+    const current = activeBoardRecord(); board = [...current.appIds]; savedCollections = [...current.collectionIds];
+    persistBoard({notify:false}); renderBoardToolbar(); render();
+  },
+  applyCloudBoard(remoteRecord) {
+    const index = boardRecords.findIndex(x => x.id === remoteRecord.id || x.cloudId === remoteRecord.id);
+    const record = boardModel.reconcileCloudBoard(index < 0 ? null : boardRecords[index], remoteRecord);
+    if (index < 0) boardRecords.push(record); else boardRecords[index] = record;
+    if (activeBoardId === record.id || activeBoardRecord()?.cloudId === record.id) {
+      activeBoardId = record.id; board = [...record.appIds]; savedCollections = [...record.collectionIds];
+    }
+    persistBoard({notify:false}); renderBoardToolbar(); render();
+    return cloneBoard(record);
+  }
+};
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
 const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
-function media(s, fullSize = false) {
+function media(s, fullSize = false, sharpPreview = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
   const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
+  const small = full.replace('/1290x2796bb.png', '/640x1386bb.jpg');
+  const retina = sharpPreview ? full : small;
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && retina ? `srcset="${esc(p)} 1x, ${esc(retina)} 2x"` : ''} data-preview="${esc(p)}" loading="${fullSize ? 'eager' : 'lazy'}" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
 function handleMediaLoad(image) {
   image.classList.add('loaded');
@@ -40,7 +146,7 @@ function appIcon(x) {
   return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" src="${esc(p)}" loading="eager" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">` : '<div class="icon-ph"></div>';
 }
 function screenCard(s) {
-  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
+  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(displayCategory(s))}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
 }
 function screenIds(ids) {
   const known = new Set((data.screens || []).map(s => s.id));
@@ -50,25 +156,39 @@ function curationCard(x, kind) {
   const ids = kind === 'flows' ? x.assetIds : [x.screenId];
   const shots = ids.map(id => data.screens.find(s => s.id === id)).filter(Boolean);
   const collectionId = `${kind}:${x.id}`, isSaved = savedCollections.includes(collectionId);
+  const appName = x.appName || data.apps.find(app => app.id === x.appId)?.name || '';
+  const type = kind === 'flows' ? 'Listing collection' : 'UI element';
+  const detail = kind === 'flows' ? shots.length + ' screenshots · order unverified' : (shots.length ? '1 screenshot · visual review' : 'No screenshot available');
   const actions = kind === 'flows' ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${isSaved}">${isSaved ? 'Saved' : 'Save collection'}</button>` : ids.map(id => `<button data-save="${esc(id)}" aria-pressed="${board.includes(id)}">${board.includes(id) ? 'Saved' : 'Save'}</button><button data-select="${esc(id)}" aria-pressed="${selected.has(id)}">${selected.has(id) ? 'Selected' : 'Compare'}</button>`).join('');
-  return `<article class="pin collection-card collection-${kind}"><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Open ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s)}</span>`).join('')}</div><span class="pincaption">${esc(x.title)}</span><span class="pinmeta">${esc(x.category || 'Curated reference')}${x.appName ? ` · ${esc(x.appName)}` : ''} · ${shots.length} screenshot${shots.length === 1 ? '' : 's'}</span><p class="collection-description">${esc(x.description || '')}</p></button><div class="pinactions">${actions}</div></article>`;
+  const openLabel = kind === 'flows' ? 'Open collection' : 'Open screen';
+  return `<article class="pin collection-card collection-${kind}"><div class="collection-card-header"><div class="collection-card-copy"><span class="collection-type">${type}</span><h3 class="collection-title">${esc(x.title)}</h3><p class="collection-meta">${appName ? `<strong>${esc(appName)}</strong> · ` : ''}${esc(x.category || 'Curated reference')} · ${detail}</p><p class="collection-description">${esc(x.description || '')}</p></div><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="${openLabel}: ${esc(x.title)}">${openLabel}</button></div><button class="collection-preview-button" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Preview ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s, false, kind === 'elements')}</span>`).join('')}</div></button><div class="pinactions">${actions}</div></article>`;
+}
+function itemCategories(x) {
+  return [...new Set([x.category, ...(x.chartMemberships || []).map(c => c.name), ...(x.categories || [])].filter(Boolean))];
+}
+function displayCategory(x) {
+  const category = $('#category').value;
+  return itemCategories(x).includes(category) ? category : (x.category || 'App Store');
+}
+function appChart(x) {
+  const category = $('#category').value;
+  const membership = (x.chartMemberships || []).find(c => c.name === category);
+  return membership ? {category:membership.name,rank:membership.rank} : {category:x.category,rank:x.chartRank};
 }
 function appCard(x) {
   const shot = data.screens.find(s => (x.assetIds || []).includes(s.id));
-  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(x.chartRank) ? `<span class="pinrank">#${x.chartRank} in ${esc(x.category)}</span>` : '';
-  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(x.category || 'App Store')}</span></button></article>`;
-}
-function appDetailCard(s, index, appId) {
-  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
+  const chart = appChart(x);
+  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(chart.rank) ? `<span class="pinrank">#${chart.rank} in ${esc(chart.category)}</span>` : '';
+  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(chart.category || 'App Store')}</span></button></article>`;
 }
 function matchesFilters(x) {
   const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
-  return (!q || [x.name,x.title,x.category,x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || x.category === cat);
+  return (!q || [x.name,x.title,...itemCategories(x),x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || itemCategories(x).includes(cat));
 }
 function filtered(items) {
   const out = items.filter(matchesFilters);
   if ($('#sort').value === 'name') out.sort((a,b) => (a.name || a.title || '').localeCompare(b.name || b.title || ''));
-  else if (data.coverage?.rankBasis === 'original-category-feed') out.sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999));
+  else if (data.coverage?.rankBasis === 'original-category-feed') out.sort((a,b) => (appChart(a).rank ?? 999) - (appChart(b).rank ?? 999));
   return out;
 }
 function currentItems() {
@@ -104,7 +224,7 @@ function mergeCuration(curation) {
   data.elements = [...(data.elements || []), ...elements];
 }
 function docs() {
-  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. An app appearing in multiple categories is kept in the first category encountered.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Your board stays in this browser</h3><p>Saved screenshots and curated flow collections are stored on this device. Export a board to keep a copy or supply it to your agent. There is no account sync. Your agent host's policies apply to anything you share with it.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
+  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. Each app has one record and retains its rank in every fetched category chart. Category filters include overlapping apps. Apple may return fewer than 100 entries, and some entries may lack Lookup metadata; coverage counts record those shortfalls.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Local boards and optional sync</h3><p>Saved screenshots and curated flow collections stay on this device by default. Optional cloud sync is disabled until the dedicated Firebase project is set up. Once enabled, verified signed-in users can sync private boards and share them with invited members. Export a board to keep a copy or supply it to your agent. Your agent host's policies apply to anything you share with it.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
 }
 function pluginDocs() {
   return `<div class="doc"><h2>Review your references.</h2><p>Give your agent screenshots, interface text, source code, or an exported board. Ask for up to three prioritized improvements, each tied to evidence and a way to test it.</p><ol><li>Save useful screenshots to your board.</li><li>Export your references and attach the relevant images or code to your agent.</li><li>Ask: “Use Hugging App to review these references. Cite the evidence and mark unseen states as unverified.”</li></ol><p>The plugin reviews material you supply. It does not automatically browse this catalog or fetch third-party libraries. Your host processes supplied content under its own policies.</p><p><a class="text-link" href="https://github.com/PatchworkMD/app-design-research" target="_blank" rel="noopener noreferrer">Plugin source & installation ↗</a> · <a href="https://chatgpt.com/plugins/plugins_6a9e2172a0608191ad0b9dc952483df3" target="_blank" rel="noopener noreferrer">Open in ChatGPT ↗</a></p><p class="meta">Hugging App · Build &amp; Ship iOS Apps.</p></div>`;
@@ -121,6 +241,7 @@ function render() {
   const r = route(), informational = ['agents','plugin'].includes(r);
   document.querySelectorAll('nav a').forEach(a => { const on = a.hash === '#' + r; a.classList.toggle('active',on); on ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'); });
   $('#hero').hidden = r !== 'apps'; $('#title').textContent = routes[r];
+  renderBoardToolbar();
   $('#controls').hidden = informational; $('#export').hidden = informational;
   $('#kind').disabled = true;
   const built = new Date(data.coverage?.generatedAt);
@@ -135,7 +256,8 @@ function render() {
   }
   $('#export').disabled = false;
   const items = currentItems(), collections = r === 'boards' ? currentBoardCollections() : [];
-  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? ' · saved on this device' : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
+  const boardStatus = r === 'boards' ? (activeBoardRecord().ownerUid ? ' · synced board' : ' · saved on this device') : '';
+  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${boardStatus}${storageWarning ? ' · ' + storageWarning : ''}`;
   $('#more').hidden = items.length <= limit;
   $('#content').className = ['elements','flows'].includes(r) || collections.length ? 'grid curated-grid' : 'grid';
   const empty = r === 'boards' ? '<h3>Your board is empty.</h3><p>Save screenshots or a curated flow, then export your research board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h3>No ${esc(routes[r].toLowerCase())} in this dataset</h3><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h3>No matching results</h3><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
@@ -147,11 +269,13 @@ function render() {
 function openScreens(shots, index, title, context = '', returnAppId = null) {
   if (!shots.length) return;
   viewerState = {shots, index, title, context, returnAppId};
+  $('#viewer').classList.remove('app-viewer');
   $('#viewer').classList.add('screen-viewer');
   renderScreen();
   if (!$('#viewer').open) $('#viewer').showModal();
 }
 function renderScreen() {
+  if (viewerState.app) { renderAppViewer(); return; }
   const {shots, index, title, context} = viewerState, s = shots[index];
   const returnApp = viewerState.returnAppId ? data.apps.find(app => app.id === viewerState.returnAppId) : null;
   const back = returnApp ? `<button class="screen-back" data-back-app="${esc(returnApp.id)}">Back to app</button>` : '';
@@ -164,24 +288,39 @@ function view(id, returnAppId = null) {
   const screen = data.screens.find(s => s.id === id); if (!screen) return;
   const app = data.apps.find(a => (a.assetIds || []).includes(id));
   const shots = app ? app.assetIds.map(id => data.screens.find(s => s.id === id)).filter(Boolean) : [screen];
-  const context = app ? `${app.category || 'App Store'} · App Store listing screenshots` : '';
+  const context = app ? `${displayCategory(app)} · App Store listing screenshots` : '';
   openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot', context, returnAppId);
 }
-function openApp(app, focusScreenId = null) {
-  const related = (app.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
-  viewerState = null;
-  $('#viewer').classList.remove('screen-viewer');
+function renderAppViewer() {
+  const {app, shots, index} = viewerState;
+  const shot = shots[index];
+  const rating = Number.isFinite(app.rating) ? ' · ' + app.rating.toFixed(1) + ' / 5 App Store rating' : '';
+  const appMeta = displayCategory(app) + ' · ' + shots.length + ' listing screenshot' + (shots.length === 1 ? '' : 's') + rating;
+  const reference = '<a class="app-viewer-reference" href="/apps/' + encodeURIComponent(app.id) + '/">Reference page ↗</a>';
+  const identity = '<div class="app-viewer-identity">' + appIcon(app) + '<div class="app-viewer-meta"><span>' + esc(appMeta) + '</span>' + reference + '</div></div>';
+  if (!shot) {
+    $('#viewerContent').innerHTML = identity + '<div class="empty app-viewer-empty"><h3>No screenshots available yet.</h3><p>This listing does not include screenshots in the current snapshot.</p>' + sourceLink(app.url) + '</div>';
+    return;
+  }
+  const stage = '<div class="app-viewer-stage"><button data-step="-1" aria-label="Previous screenshot" ' + (index === 0 ? 'disabled' : '') + '>Previous</button><figure class="app-viewer-canvas">' + media(shot, true) + '</figure><button data-step="1" aria-label="Next screenshot" ' + (index === shots.length - 1 ? 'disabled' : '') + '>Next</button></div>';
+  const toolbar = '<div class="app-viewer-toolbar"><span role="status" class="app-viewer-position">' + (index + 1) + ' / ' + shots.length + '</span>' + sourceLink(shot.sourceUrl || app.url) + '<div class="pinactions"><button data-save="' + esc(shot.id) + '" aria-pressed="' + board.includes(shot.id) + '">' + (board.includes(shot.id) ? 'Saved' : 'Save') + '</button><button data-select="' + esc(shot.id) + '" aria-pressed="' + selected.has(shot.id) + '">' + (selected.has(shot.id) ? 'Selected' : 'Compare') + '</button></div></div>';
+  const thumbnails = '<div class="app-viewer-thumbnails" aria-label="Screenshots">' + shots.map((item, i) => '<button data-thumb="' + i + '" aria-label="Screenshot ' + (i + 1) + '" aria-current="' + (i === index ? 'true' : 'false') + '">' + media({...item,title:'Screenshot ' + (i + 1)}) + '</button>').join('') + '</div>';
   $('#viewerTitle').textContent = app.name;
-  const links = [sourceLink(app.url), `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>`].filter(Boolean).join(' · ');
-  const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
-  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(app.category || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
-  const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
-  $('#viewerContent').innerHTML = summary + gallery;
+  $('#viewerContent').innerHTML = identity + stage + toolbar + thumbnails;
+}
+function openApp(app, focusScreenId = null) {
+  const shots = (app.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
+  const focused = shots.findIndex(s => s.id === focusScreenId);
+  viewerState = {app, shots, index:focused >= 0 ? focused : 0, title:app.name, context:'App Store listing screenshots'};
+  $('#viewer').classList.remove('screen-viewer');
+  $('#viewer').classList.add('app-viewer');
+  $('#viewerTitle').textContent = app.name;
+  renderAppViewer();
   if (!$('#viewer').open) $('#viewer').showModal();
   if (focusScreenId) requestAnimationFrame(() => {
-    const target = [...document.querySelectorAll('.app-detail-image')].find(button => button.dataset.view === focusScreenId);
+    const target = document.querySelector('.app-viewer-thumbnails [data-thumb="' + viewerState.index + '"]');
     target?.focus({preventScroll:true});
-    target?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+    target?.scrollIntoView({block:'nearest',inline:'nearest'});
   });
 }
 function viewCollection(id, kind) {
@@ -220,13 +359,13 @@ document.addEventListener('click', e => {
   else if (b.dataset.saveCollection) {
     const id = b.dataset.saveCollection;
     savedCollections = savedCollections.includes(id) ? savedCollections.filter(x => x !== id) : [...savedCollections,id];
-    try { localStorage.setItem('oac-board-collections',JSON.stringify(savedCollections)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    persistBoard();
     if (route() === 'boards') render();
     syncActions();
     if (storageWarning) $('#status').textContent = storageWarning;
   } else if (b.dataset.save) {
     const id = b.dataset.save; board = board.includes(id) ? board.filter(x => x !== id) : [...board,id];
-    try { localStorage.setItem('oac-board',JSON.stringify(board)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    persistBoard();
     if (route() === 'boards') render();
     syncActions();
     if (storageWarning) $('#status').textContent = storageWarning;
@@ -249,7 +388,7 @@ document.addEventListener('click', e => {
 $('#compare').onclick = () => {
   if (!data) return;
   if (selected.size < 2) { $('#status').textContent = 'Select at least two screens to compare'; return; }
-  viewerState = null; $('#viewer').classList.remove('screen-viewer');
+  viewerState = null; $('#viewer').classList.remove('screen-viewer','app-viewer');
   $('#viewerTitle').textContent = 'Compare references';
   $('#viewerContent').innerHTML = `<div class="comparegrid">${data.screens.filter(s => selected.has(s.id)).map(screenCard).join('')}</div>`;
   if (!$('#viewer').open) $('#viewer').showModal();
@@ -258,14 +397,43 @@ document.addEventListener('keydown', e => {
   if (!$('#viewer').open || !viewerState || e.altKey || e.ctrlKey || e.metaKey || !['ArrowLeft','ArrowRight'].includes(e.key) || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   e.preventDefault();
   const index = viewerState.index + (e.key === 'ArrowRight' ? 1 : -1);
-  if (index >= 0 && index < viewerState.shots.length) { viewerState.index = index; renderScreen(); $('.screen-thumbnails [aria-current="true"]')?.focus({preventScroll:true}); }
+  if (index >= 0 && index < viewerState.shots.length) { viewerState.index = index; renderScreen(); $('.screen-thumbnails [aria-current="true"], .app-viewer-thumbnails [aria-current="true"]')?.focus({preventScroll:true}); }
 });
-$('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').classList.remove('screen-viewer'); });
+$('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').classList.remove('screen-viewer','app-viewer'); });
 $('#close').onclick = () => $('#viewer').close();
 $('#viewer').addEventListener('click', e => { if (e.target === $('#viewer')) $('#viewer').close(); });
 $('#more').onclick = () => { limit += 48; render(); };
+$('#boardSelect').addEventListener('change', e => window.huggingApp.selectBoard(e.target.value));
+$('#newBoard').onclick = () => { $('#boardName').value = ''; $('#boardDialog').showModal(); $('#boardName').focus(); };
+$('#boardCreateForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#boardName').value.trim(); if (!name) return;
+  const created = makeLocalBoard(name); boardRecords.push(created); activateBoard(created.id);
+  $('#boardDialog').close(); $('#boardSelect').focus();
+});
+$('#boardClose').onclick = () => $('#boardDialog').close();
+$('#shareBoard').onclick = () => {
+  if (!$('#accountDialog').open) $('#accountDialog').showModal();
+  window.dispatchEvent(new CustomEvent('hugging:share-board-request', {detail:{board:cloneBoard(activeBoardRecord())}}));
+};
 ['search','category','kind','sort'].forEach(id => $('#' + id).addEventListener('input', () => { limit = 48; render(); }));
-window.addEventListener('hashchange', () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); });
+let activeRouteTransition = null;
+window.addEventListener('hashchange', () => {
+  const navigate = () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); };
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { navigate(); return; }
+  if (activeRouteTransition) {
+    activeRouteTransition.skipTransition();
+    navigate();
+    return;
+  }
+  const transition = document.startViewTransition(navigate);
+  activeRouteTransition = transition;
+  transition.ready?.catch(() => {});
+  transition.finished.then(
+    () => { if (activeRouteTransition === transition) activeRouteTransition = null; },
+    () => { if (activeRouteTransition === transition) activeRouteTransition = null; }
+  );
+});
 $('#export').onclick = () => {
   if (!data || ['agents','plugin'].includes(route())) return;
   const items = currentItems();
@@ -280,7 +448,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   data = d;
   for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
   catalogScreenCount = data.screens.length;
-  const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+  const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].flatMap(itemCategories))].sort();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
   fillHero(); render(); $('#export').disabled = false;
   loadCuration();
@@ -298,7 +466,7 @@ async function loadCuration() {
     if (!curation || !Array.isArray(curation.flows) || !Array.isArray(curation.elements)) throw Error('Invalid reviewed library');
     mergeCuration(curation);
     const category = $('#category').value;
-    const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+    const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].flatMap(itemCategories))].sort();
     $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
     $('#category').value = category;
     curationState = 'ready'; fillHero();

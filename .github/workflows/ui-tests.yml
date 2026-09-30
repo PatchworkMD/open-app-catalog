@@ -1,0 +1,47 @@
+name: UI browser tests
+
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'tests/**'
+      - '.github/workflows/ui-tests.yml'
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: npm install --no-save playwright
+      - name: Install Chromium
+        run: npx playwright install --with-deps chrome
+      - name: Run catalog browser checks
+        env:
+          TMPDIR: ${{ runner.temp }}
+          QA_ARTIFACT_DIR: .omo/evidence
+          PLAYWRIGHT_CHANNEL: chrome
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .omo/evidence
+          node --check site/app.js
+          node tests/category.test.cjs 2>&1 | tee .omo/evidence/category-ui-tests.log
+          node tests/site.test.cjs 2>&1 | tee .omo/evidence/site-ui-tests.log
+          node tests/viewer.test.cjs 2>&1 | tee .omo/evidence/viewer-ui-tests.log
+          node tests/curation.test.cjs 2>&1 | tee .omo/evidence/curation-ui-tests.log
+          node tests/media.test.cjs 2>&1 | tee .omo/evidence/media-ui-tests.log
+          node tests/resolution.test.cjs 2>&1 | tee .omo/evidence/resolution-ui-tests.log
+      - name: Upload browser QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-browser-qa
+          path: .omo/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

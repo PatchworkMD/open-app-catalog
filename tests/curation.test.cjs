@@ -13,7 +13,7 @@ const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.en
     await page.locator('.collection-card').first().waitFor();
     assert.equal(await page.locator('.collection-card').count(), 7);
     assert.equal(await page.locator('.collection-flows').first().locator('.collection-previews img').count(), 4);
-    const flowTitle = await page.locator('.collection-card').first().locator('.pincaption').textContent();
+    const flowTitle = await page.locator('.collection-card').first().locator('.collection-title').textContent();
     await page.locator('.collection-card').first().locator('[data-save-collection]').click();
     assert.equal(await page.locator('.collection-card').first().locator('[data-save-collection]').getAttribute('aria-pressed'), 'true');
     await page.locator('.collection-card').first().getByRole('button', {name:/Open/}).click();
@@ -29,7 +29,7 @@ const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.en
     await page.locator('#viewer').waitFor({state:'hidden'});
     await page.getByRole('link', {name:'Saved board', exact:true}).click();
     await page.waitForFunction(() => document.querySelector('#title').textContent === 'Saved board');
-    const savedFlow = page.locator('.collection-card .pincaption').filter({hasText:flowTitle});
+    const savedFlow = page.locator('.collection-card .collection-title').filter({hasText:flowTitle});
     await savedFlow.waitFor();
     assert.equal(await page.locator('.collection-card').count(), 1);
     const [boardDownload] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
@@ -52,7 +52,7 @@ const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.en
     assert.ok((await page.locator('#status').textContent()).includes(`${catalogScreenCount} results`));
     await page.getByRole('link', {name:'UI elements', exact:true}).click();
     await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
-    await page.screenshot({path:'/tmp/hugging-elements-fixed.png',animations:'disabled'});
+    await page.screenshot({path:(process.env.QA_ARTIFACT_DIR || '/tmp') + '/curation-elements.png',animations:'disabled'});
     await page.locator('.collection-card').first().getByRole('button', {name:/Open/}).click();
     assert.equal(await page.locator('.screen-canvas img').count(), 1);
     assert.match(await page.locator('.screen-context').textContent(), /Reviewed/);
