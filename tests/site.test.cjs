@@ -119,6 +119,37 @@ const {catalogBase} = require('./browser-fixture.cjs');
     assert(reconciled.appIds.includes('local-add') && reconciled.appIds.includes('new-remote'));
     assert(reconciled.collectionIds.includes('local-flow') && reconciled.collectionIds.includes('new-flow'));
     await syncPage.close();
+    const transitionErrors = [];
+    const transitionPage = await browser.newPage({viewport:{width:1280,height:900}});
+    transitionPage.on('pageerror', error => transitionErrors.push(error.message));
+    await transitionPage.addInitScript(() => {
+      window.__viewTransitions = [];
+      document.startViewTransition = callback => {
+        let rejectFinished;
+        const finished = new Promise((_, reject) => { rejectFinished = reject; });
+        const transition = {
+          finished,
+          skipped:false,
+          skip() { this.skipped = true; rejectFinished(new Error('Transition was skipped. New ViewTransition started')); }
+        };
+        window.__viewTransitions.push(transition);
+        callback();
+        return transition;
+      };
+    });
+    const transitionBase = await catalogBase(transitionPage);
+    await transitionPage.goto(transitionBase + '#apps');
+    await transitionPage.locator('.app-open').first().waitFor();
+    await transitionPage.evaluate(() => { location.hash = '#screens'; });
+    await transitionPage.waitForFunction(() => document.querySelector('#title').textContent === 'Screens');
+    await transitionPage.evaluate(() => { location.hash = '#flows'; });
+    await transitionPage.waitForFunction(() => document.querySelector('#title').textContent === 'Flows');
+    assert.deepEqual(await transitionPage.evaluate(() => ({
+      count:window.__viewTransitions.length,
+      skipped:window.__viewTransitions[0]?.skipped
+    })),{count:1,skipped:true});
+    assert.deepEqual(transitionErrors,[]);
+    await transitionPage.close();
     const blocked = await browser.newPage();
     await catalogBase(blocked);
     await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));
