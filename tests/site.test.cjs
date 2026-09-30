@@ -124,13 +124,16 @@ const {catalogBase} = require('./browser-fixture.cjs');
     transitionPage.on('pageerror', error => transitionErrors.push(error.message));
     await transitionPage.addInitScript(() => {
       window.__viewTransitions = [];
+      window.__unhandledTransitions = [];
+      window.addEventListener('unhandledrejection', event => window.__unhandledTransitions.push(String(event.reason)));
       document.startViewTransition = callback => {
-        let rejectFinished;
-        const finished = new Promise((_, reject) => { rejectFinished = reject; });
+        let rejectReady;
+        const ready = new Promise((_, reject) => { rejectReady = reject; });
         const transition = {
-          finished,
+          ready,
+          finished:Promise.resolve(),
           skipped:false,
-          skipTransition() { this.skipped = true; rejectFinished(new Error('Transition was skipped. New ViewTransition started')); }
+          skipTransition() { this.skipped = true; rejectReady(new Error('Transition was skipped. New ViewTransition started')); }
         };
         window.__viewTransitions.push(transition);
         callback();
@@ -149,11 +152,16 @@ const {catalogBase} = require('./browser-fixture.cjs');
       skipped:window.__viewTransitions[0]?.skipped
     })),{count:1,skipped:true});
     assert.deepEqual(transitionErrors,[]);
+    assert.deepEqual(await transitionPage.evaluate(() => window.__unhandledTransitions),[]);
     await transitionPage.close();
 
     const chromiumTransitionErrors = [];
     const chromiumTransitionPage = await browser.newPage({viewport:{width:1280,height:900}});
     chromiumTransitionPage.on('pageerror', error => chromiumTransitionErrors.push(error.message));
+    await chromiumTransitionPage.addInitScript(() => {
+      window.__unhandledTransitions = [];
+      window.addEventListener('unhandledrejection', event => window.__unhandledTransitions.push(String(event.reason)));
+    });
     const chromiumBase = await catalogBase(chromiumTransitionPage);
     await chromiumTransitionPage.goto(chromiumBase + '#apps');
     await chromiumTransitionPage.locator('.app-open').first().waitFor();
@@ -169,6 +177,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
     });
     await chromiumTransitionPage.waitForFunction(() => document.querySelector('#title').textContent === 'Flows');
     assert.deepEqual(chromiumTransitionErrors,[]);
+    assert.deepEqual(await chromiumTransitionPage.evaluate(() => window.__unhandledTransitions),[]);
     await chromiumTransitionPage.close();
     const blocked = await browser.newPage();
     await catalogBase(blocked);
