@@ -4,14 +4,13 @@ on:
   pull_request:
     paths:
       - 'site/**'
-      - 'tests/site.test.cjs'
-      - 'tests/category.test.cjs'
-      - 'tests/browser-fixture.cjs'
+      - 'tests/**'
       - '.github/workflows/ui-tests.yml'
 
 jobs:
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,13 +23,20 @@ jobs:
       - name: Run catalog browser checks
         env:
           TMPDIR: ${{ runner.temp }}
+          QA_ARTIFACT_DIR: .omo/evidence
+          PLAYWRIGHT_CHANNEL: chrome
         shell: bash
         run: |
+          set -o pipefail
           mkdir -p .omo/evidence
           node --check site/app.js
           node tests/category.test.cjs 2>&1 | tee .omo/evidence/category-ui-tests.log
-          node tests/site.test.cjs 2>&1 | tee .omo/evidence/browser-tests.log
-      - name: Upload browser QA screenshots
+          node tests/site.test.cjs 2>&1 | tee .omo/evidence/site-ui-tests.log
+          node tests/viewer.test.cjs 2>&1 | tee .omo/evidence/viewer-ui-tests.log
+          node tests/curation.test.cjs 2>&1 | tee .omo/evidence/curation-ui-tests.log
+          node tests/media.test.cjs 2>&1 | tee .omo/evidence/media-ui-tests.log
+          node tests/resolution.test.cjs 2>&1 | tee .omo/evidence/resolution-ui-tests.log
+      - name: Upload browser QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
