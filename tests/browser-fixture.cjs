@@ -13,6 +13,7 @@ const mimeTypes = {
   '.svg':'image/svg+xml',
   '.woff2':'font/woff2'
 };
+const previewFixture = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="640"><rect width="320" height="640" fill="#7371d9"/></svg>');
 
 async function catalogBase(page) {
   const configured = process.env.CATALOG_TEST_URL;
@@ -22,6 +23,9 @@ async function catalogBase(page) {
     try {
       const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
       const relative = pathname === '/' ? '/index.html' : pathname;
+      if (/^\/assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(relative)) {
+        return route.fulfill({status:200, body:previewFixture, contentType:'image/svg+xml'});
+      }
       const file = path.resolve(siteRoot, `.${relative}`);
       if (file !== siteRoot && !file.startsWith(`${siteRoot}${path.sep}`)) {
         return route.fulfill({status:403, body:'Blocked path'});
