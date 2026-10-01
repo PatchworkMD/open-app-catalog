@@ -257,13 +257,26 @@ def upload_new_assets(data: dict, previous: dict | None = None) -> None:
         list(pool.map(upload, names))
 
 
+def reconcile_curated_screens(data: dict, curation: dict) -> dict:
+    catalog_ids = {screen["id"] for screen in data.get("screens", []) if screen.get("id")}
+    for screen in curation.get("screens", []):
+        if screen.get("id") in catalog_ids:
+            screen.pop("curatedOnly", None)
+        else:
+            screen["curatedOnly"] = True
+    return curation
+
+
 def main() -> None:
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     data = build()
     if not data["apps"] or not data["screens"]:
         raise RuntimeError("catalog build returned an empty snapshot")
     out = SITE_DIR / "data.json"
+    curation_out = SITE_DIR / "curation.json"
     previous = json.loads(out.read_text()) if out.exists() else {}
+    curation = json.loads(curation_out.read_text()) if curation_out.exists() else {}
+    reconcile_curated_screens(data, curation)
     old_ids = {str(app['id']) for app in previous.get('apps', [])}
     new_ids = {str(app['id']) for app in data['apps']}
     data.setdefault('coverage', {})['changes'] = {
@@ -272,10 +285,26 @@ def main() -> None:
     }
     upload_new_assets(data, previous)
     temp = out.with_suffix(".json.tmp")
+    curation_temp = curation_out.with_suffix(".json.tmp")
     temp.write_text(json.dumps(data, indent=2, sort_keys=True))
+    curation_temp.write_text(json.dumps(curation, indent=2))
     temp.replace(out)
+    curation_temp.replace(curation_out)
     print(f"wrote {out} ({len(data['apps'])} apps, {len(data['screens'])} screens)")
 
 
+def reconcile_current_snapshot() -> None:
+    snapshot = json.loads((SITE_DIR / "data.json").read_text())
+    curation_path = SITE_DIR / "curation.json"
+    curation = json.loads(curation_path.read_text())
+    reconcile_curated_screens(snapshot, curation)
+    temp = curation_path.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(curation, indent=2))
+    temp.replace(curation_path)
+
+
 if __name__ == "__main__":
-    main()
+    if "--reconcile-only" in sys.argv[1:]:
+        reconcile_current_snapshot()
+    else:
+        main()

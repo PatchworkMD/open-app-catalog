@@ -9,7 +9,7 @@ const catalogCategories = () => [...new Set([
   ...data.elements.map(x => x.category)
 ].filter(Boolean))].sort();
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
-let viewerState = null, curationState = 'loading', resolutionMap = {};
+let viewerState = null, curationState = 'loading', resolutionMap = {}, catalogScreenCount = 0;
 let data, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
@@ -19,11 +19,26 @@ function media(s, fullSize = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
   const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}" onload="this.classList.add('loaded')" onerror="if(this.dataset.preview){this.removeAttribute('srcset');this.src=this.dataset.preview;delete this.dataset.preview;}else this.replaceWith(Object.assign(document.createElement('span'),{className:'media-unavailable',textContent:'Image unavailable'}))">` : '<span>Media unavailable</span>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
+function handleMediaError(image) {
+  const preview = image.dataset.preview;
+  const source = image.currentSrc || image.getAttribute('src') || '';
+  if (preview && /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\//.test(source) && image.dataset.previewAttempted !== 'true') {
+    image.dataset.previewAttempted = 'true'; image.removeAttribute('srcset'); image.src = preview; return;
+  }
+  image.replaceWith(Object.assign(document.createElement('span'), {className:'media-unavailable',textContent:'Image unavailable'}));
+}
+document.addEventListener('load', event => {
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) event.target.classList.add('loaded');
+}, true);
+document.addEventListener('error', event => {
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) handleMediaError(event.target);
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-icon')) event.target.replaceWith(Object.assign(document.createElement('div'), {className:'icon-ph'}));
+}, true);
 function appIcon(x) {
   const p = String(x.iconPath || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" src="${esc(p)}" loading="eager" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">` : '<div class="icon-ph"></div>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" data-catalog-icon src="${esc(p)}" loading="eager" alt="">` : '<div class="icon-ph"></div>';
 }
 function screenCard(s) {
   return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
@@ -64,7 +79,11 @@ function filtered(items) {
   }
   return out;
 }
-function currentItems() { return filtered(route() === 'boards' ? data.screens.filter(s => board.includes(s.id)) : data[route()] || []); }
+function currentItems() {
+  const r = route();
+  const items = r === 'boards' ? data.screens.filter(s => board.includes(s.id)) : data[r] || [];
+  return filtered(r === 'screens' ? items.filter(s => !s.curatedOnly) : items);
+}
 function currentBoardCollections() {
   return [
     ...(data.flows || []).map(record => ({kind:'flows',record})),
@@ -103,7 +122,7 @@ function fillHero() {
   const shots = [...data.apps].sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999)).map(a => data.screens.find(s => (a.assetIds || []).includes(s.id))).filter(Boolean);
   nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]).replace('loading="eager"', 'loading="eager"'); });
   const copy = $('#hero p');
-  if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${data.screens.length.toLocaleString()} listing screenshots to explore.`;
+  if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${catalogScreenCount.toLocaleString()} listing screenshots to explore.`;
 }
 function render() {
   if (!data) return;
@@ -268,6 +287,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   resolutionMap = sources && typeof sources === 'object' && !Array.isArray(sources) ? sources : {};
   data = d;
   for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
+  catalogScreenCount = data.screens.length;
   const cats = catalogCategories();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
   fillHero(); render(); $('#export').disabled = false;

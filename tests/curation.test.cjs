@@ -62,6 +62,7 @@ const reviewedCuration = require('../site/curation.json');
     const malformedErrors = [];
     malformed.on('pageerror', error => malformedErrors.push(error.message));
     await malformed.route('**/curation.json', route => route.fulfill({contentType:'application/json',body:JSON.stringify({
+      screens:reviewedCuration.screens,
       flows:[null,{id:'bad',title:'Bad',assetIds:{}},...reviewedCuration.flows],
       elements:[null,...reviewedCuration.elements]
     })}));

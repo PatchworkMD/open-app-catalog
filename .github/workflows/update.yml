@@ -1,6 +1,16 @@
 name: Update catalog
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/update.yml"
+      - "pipeline/**"
+      - "site/**"
+      - "!site/data.json"
+      - "!site/curation.json"
+      - "worker/**"
+      - "wrangler.jsonc"
   schedule:
     - cron: "17 6 * * *" # daily, 06:17 UTC
   workflow_dispatch:
@@ -38,7 +48,6 @@ jobs:
 
       - name: Check pipeline and site syntax
         run: |
-          python3 -m unittest discover -s pipeline -p 'test_*.py'
           node --check site/app.js
 
       - name: Check Cloudflare credentials
@@ -51,12 +60,19 @@ jobs:
         if: github.event_name == 'schedule' || inputs.refresh
         run: python3 pipeline/fetch.py
 
+      - name: Reconcile current snapshot curation
+        if: github.event_name == 'workflow_dispatch' && !inputs.refresh
+        run: python3 pipeline/fetch.py --reconcile-only
+
+      - name: Check pipeline tests
+        run: python3 -m unittest discover -s pipeline -p 'test_*.py'
+
       - name: Commit refreshed catalog
         if: github.event_name == 'schedule' || inputs.refresh
         run: |
           git config user.name "open-app-catalog-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add site/data.json
+          git add site/data.json site/curation.json
           git diff --cached --quiet && echo "no changes" && exit 0
           git commit -m "chore: refresh catalog $(date -u +%Y-%m-%d)"
           git push

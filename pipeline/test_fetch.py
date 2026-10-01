@@ -13,6 +13,22 @@ SPEC.loader.exec_module(fetch)
 
 
 class BuildTest(unittest.TestCase):
+    def test_curated_screen_flags_follow_the_refreshed_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data.json").write_text(json.dumps({"apps": [], "screens": []}))
+            (root / "curation.json").write_text(json.dumps({"screens": [
+                {"id": "in-snapshot", "path": "assets/in-snapshot.png", "curatedOnly": True},
+                {"id": "curated-only", "path": "assets/curated-only.png"},
+            ]}))
+            snapshot = {"apps": [{"id": "a"}], "screens": [{"id": "in-snapshot", "path": "assets/in-snapshot.png"}]}
+            with patch.object(fetch, "SITE_DIR", root), patch.object(fetch, "build", return_value=snapshot), \
+                 patch.dict(fetch.os.environ, {"CATALOG_R2_UPLOAD": ""}):
+                fetch.main()
+            screens = json.loads((root / "curation.json").read_text())["screens"]
+            self.assertNotIn("curatedOnly", screens[0])
+            self.assertTrue(screens[1]["curatedOnly"])
+
     def test_screenshot_keeps_stable_id_and_adds_full_resolution_source(self):
         saved = {"id": "stable", "path": "assets/stable.jpg"}
         with patch.object(fetch, "save_image", return_value=saved.copy()):

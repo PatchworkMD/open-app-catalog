@@ -9,17 +9,20 @@ const {catalogBase}=require('./browser-fixture.cjs');
   await page.goto(base+'#apps');
   await page.locator('.app-open').first().waitFor();
   for(const name of ['WeChat','Garmin Messenger™']){
+   await page.locator('#search').fill(name);
    const img=page.getByRole('button',{name:'Open '+name,exact:true}).locator('img');
    assert.equal(await img.getAttribute('loading'),'eager');
    await img.evaluate(e=>e.decode());
    assert(await img.evaluate(e=>e.naturalWidth>0));
    assert.equal(await img.evaluate(e=>e.classList.contains('loaded')),true);
   }
+  await page.locator('#search').fill('WeChat');
   const src=await page.getByRole('button',{name:'Open WeChat',exact:true}).locator('img').getAttribute('src');
   const stalled=await browser.newPage();await catalogBase(stalled);let release;
   const gate=new Promise(r=>release=r);
   await stalled.route('**/'+src,async route=>{await gate;await route.fulfill({status:404,body:''})});
   await stalled.goto(base+'#apps',{waitUntil:'domcontentloaded'});
+  await stalled.locator('#search').fill('WeChat');
   const card=stalled.getByRole('button',{name:'Open WeChat',exact:true});
   await card.waitFor();
   await stalled.waitForFunction(() => {
