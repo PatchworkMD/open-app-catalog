@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -28,8 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE_DIR = ROOT / "site"
 ASSETS_DIR = SITE_DIR / "assets"
 STORE = "us"
-CHART_LIMIT = 200
-SCREENSHOTS_PER_APP = 4
+CHART_LIMIT = 100
+SCREENSHOTS_PER_APP = 10
 USER_AGENT = "open-app-catalog/0.1 (+https://github.com/PatchworkMD/open-app-catalog)"
 # Media is served from R2 by the Worker, not shipped with the deploy; the local
 # copy under site/assets stays for offline development.
@@ -126,29 +127,45 @@ def save_image(url: str) -> dict | None:
     return {"id": digest, "kind": "image", "path": f"assets/{digest}.{ext}"}
 
 
-save_screenshot = save_image
+def save_screenshot(url: str) -> dict | None:
+    saved = save_image(url)
+    if saved and re.match(r"^https://is[0-9]+-ssl\.mzstatic\.com/image/thumb/", url):
+        full = re.sub(r"/[^/]+$", "/1290x2796bb.png", url)
+        saved["fullSizeUrl"] = full
+    return saved
 
 
 def build() -> dict:
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     apps: list[dict] = []
     screens: list[dict] = []
-    seen_ids: set[str] = set()
+    apps_by_id: dict[str, dict] = {}
+    chart_memberships: dict[str, dict[str, int]] = {}
+    category_coverage: list[dict] = []
 
     for genre_id, (label, _arpu) in GENRES.items():
         print(f"charts: {label}")
-        feed_ids = fetch_chart_ids(genre_id)
-        rank_by_id = {app_id: rank + 1 for rank, app_id in enumerate(feed_ids)}
-        chart_ids = [i for i in feed_ids if i not in seen_ids]
-        seen_ids.update(chart_ids)
-        if not chart_ids:
-            continue
-        details = lookup_apps(chart_ids)
+        feed_ids = fetch_chart_ids(genre_id)[:CHART_LIMIT]
+        if not feed_ids:
+            raise RuntimeError(f"Empty chart for {label}; preserving previous catalog")
+        coverage = {"id": genre_id, "name": label, "chartEntries": len(feed_ids), "catalogApps": 0, "target": CHART_LIMIT}
+        category_coverage.append(coverage)
+        rank_by_id: dict[str, int] = {}
+        for rank, app_id in enumerate(feed_ids, start=1):
+            rank_by_id.setdefault(app_id, rank)
+        for app_id, rank in rank_by_id.items():
+            chart_memberships.setdefault(app_id, {})[label] = rank
+        chart_ids = [app_id for app_id in rank_by_id if app_id not in apps_by_id]
+        details = lookup_apps(chart_ids) if chart_ids else []
+        if chart_ids and not details:
+            raise RuntimeError(f"No app metadata for {label}; preserving previous catalog")
         for d in details:
             app_id = str(d.get("trackId", ""))
-            if not app_id:
+            if not app_id or app_id not in rank_by_id or app_id in apps_by_id:
                 continue
-            rank = rank_by_id.get(app_id, CHART_LIMIT)
+            app_chart_ranks = chart_memberships[app_id]
+            category = next(iter(app_chart_ranks))
+            rank = app_chart_ranks[category]
             asset_ids = []
             for shot_url in (d.get("screenshotUrls") or [])[:SCREENSHOTS_PER_APP]:
                 saved = save_screenshot(shot_url)
@@ -159,30 +176,43 @@ def build() -> dict:
                     {
                         "id": saved["id"],
                         "title": d.get("trackName", "Screen reference"),
-                        "category": label,
+                        "category": category,
                         "kind": "image",
                         "path": saved["path"],
+                        "fullSizeUrl": saved.get("fullSizeUrl"),
                         "sourceUrl": d.get("trackViewUrl"),
                     }
                 )
             icon_url = d.get("artworkUrl512") or d.get("artworkUrl100") or d.get("artworkUrl60")
             saved_icon = save_image(icon_url) if icon_url else None
-            apps.append(
-                {
-                    "id": app_id,
-                    "name": d.get("trackName", "Unknown"),
-                    "nameBasis": "App Store Lookup API",
-                    "url": d.get("trackViewUrl"),
-                    "category": label,
-                    "chartRank": rank,
-                    "rating": d.get("averageUserRating"),
-                    "ratingCount": d.get("userRatingCount"),
-                    "assetIds": asset_ids,
-                    "iconPath": saved_icon["path"] if saved_icon else None,
-                    "revenueLabel": estimate_revenue(rank, label),
-                }
-            )
+            app = {
+                "id": app_id,
+                "name": d.get("trackName", "Unknown"),
+                "nameBasis": "App Store Lookup API",
+                "url": d.get("trackViewUrl"),
+                "category": category,
+                "categories": list(app_chart_ranks),
+                "chartRank": rank,
+                "chartRanks": dict(app_chart_ranks),
+                "rating": d.get("averageUserRating"),
+                "ratingCount": d.get("userRatingCount"),
+                "assetIds": asset_ids,
+                "iconPath": saved_icon["path"] if saved_icon else None,
+                "revenueLabel": estimate_revenue(rank, category),
+            }
+            apps.append(app)
+            apps_by_id[app_id] = app
+        for app_id, rank in rank_by_id.items():
+            app = apps_by_id.get(app_id)
+            if app:
+                if label not in app["categories"]:
+                    app["categories"].append(label)
+                app["chartRanks"][label] = rank
         time.sleep(1)
+
+    for category in category_coverage:
+        label = category["name"]
+        category["catalogApps"] = sum(label in app["categories"] for app in apps)
 
     coverage = {
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -190,6 +220,9 @@ def build() -> dict:
         "apps": len(apps),
         "screens": len(screens),
         "rankBasis": "original-category-feed",
+        "categoryCoverage": category_coverage,
+        "chartLimit": CHART_LIMIT,
+        "screenshotsPerApp": SCREENSHOTS_PER_APP,
         "chartStore": STORE,
         "chartType": "topfreeapplications",
         "note": "Revenue figures are heuristic estimates from public chart rank, "
@@ -198,7 +231,7 @@ def build() -> dict:
     return {"apps": apps, "screens": screens, "flows": [], "elements": [], "coverage": coverage}
 
 
-def upload_new_assets(data: dict) -> None:
+def upload_new_assets(data: dict, previous: dict | None = None) -> None:
     if os.environ.get("CATALOG_R2_UPLOAD") != "1":
         return
     names = {Path(item["path"]).name for item in data["screens"]}
@@ -206,7 +239,10 @@ def upload_new_assets(data: dict) -> None:
     missing = sorted(name for name in names if not (ASSETS_DIR / name).is_file())
     if missing:
         raise RuntimeError(f"{len(missing)} referenced assets missing")
-    names = sorted(names)
+    published = previous or {}
+    existing = {Path(item['path']).name for item in published.get('screens', []) if item.get('path')}
+    existing.update(Path(app['iconPath']).name for app in published.get('apps', []) if app.get('iconPath'))
+    names = sorted(names - existing)
     def upload(name: str) -> None:
         result = subprocess.run(
             ["npx", "wrangler", "r2", "object", "put",
@@ -227,7 +263,14 @@ def main() -> None:
     if not data["apps"] or not data["screens"]:
         raise RuntimeError("catalog build returned an empty snapshot")
     out = SITE_DIR / "data.json"
-    upload_new_assets(data)
+    previous = json.loads(out.read_text()) if out.exists() else {}
+    old_ids = {str(app['id']) for app in previous.get('apps', [])}
+    new_ids = {str(app['id']) for app in data['apps']}
+    data.setdefault('coverage', {})['changes'] = {
+        'addedAppIds': sorted(new_ids - old_ids),
+        'removedAppIds': sorted(old_ids - new_ids),
+    }
+    upload_new_assets(data, previous)
     temp = out.with_suffix(".json.tmp")
     temp.write_text(json.dumps(data, indent=2, sort_keys=True))
     temp.replace(out)

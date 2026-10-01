@@ -1,25 +1,31 @@
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
+const {catalogBase}=require('./browser-fixture.cjs');
 (async()=>{
  const browser=await chromium.launch({channel:'chrome',headless:true});
  try{
   const page=await browser.newPage();
-  await page.goto('http://127.0.0.1:8765/#apps');
+  const base=await catalogBase(page);
+  await page.goto(base+'#apps');
   await page.locator('.app-open').first().waitFor();
   for(const name of ['WeChat','Garmin Messenger™']){
    const img=page.getByRole('button',{name:'Open '+name,exact:true}).locator('img');
    assert.equal(await img.getAttribute('loading'),'eager');
    await img.evaluate(e=>e.decode());
-   assert(await img.evaluate(e=>e.naturalWidth>0&&e.classList.contains('loaded')));
+   assert(await img.evaluate(e=>e.naturalWidth>0));
+   assert.equal(await img.evaluate(e=>e.classList.contains('loaded')),true);
   }
   const src=await page.getByRole('button',{name:'Open WeChat',exact:true}).locator('img').getAttribute('src');
-  const stalled=await browser.newPage();let release;
+  const stalled=await browser.newPage();await catalogBase(stalled);let release;
   const gate=new Promise(r=>release=r);
   await stalled.route('**/'+src,async route=>{await gate;await route.fulfill({status:404,body:''})});
-  await stalled.goto('http://127.0.0.1:8765/#apps',{waitUntil:'domcontentloaded'});
+  await stalled.goto(base+'#apps',{waitUntil:'domcontentloaded'});
   const card=stalled.getByRole('button',{name:'Open WeChat',exact:true});
   await card.waitFor();
-  assert.match(await card.locator('.pinmedia').evaluate(e=>getComputedStyle(e,'::after').content),/Loading image/);
+  await stalled.waitForFunction(() => {
+   const media=document.querySelector('.app-open[aria-label="Open WeChat"] .pinmedia');
+   return media&&getComputedStyle(media,'::after').content.includes('Loading image');
+  });
   release();
   await card.getByText('Image unavailable',{exact:true}).waitFor();
   console.log('PASS: reported blank cards decode eagerly; stalled and failed images show explicit states');

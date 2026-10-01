@@ -5,7 +5,7 @@ directly from Apple's free public APIs — no third-party dataset is scraped,
 copied, or redistributed.
 
 **Live site:** [catalog.patchworkmd.dev](https://catalog.patchworkmd.dev/).
-Cloudflare Worker `open-app-catalog` serves the site; R2 serves its media.
+Cloudflare Worker `open-app-catalog` serves the site; R2 serves cached previews and icons. Sharp screenshot variants are loaded from Apple’s image CDN.
 
 ## Why this exists
 
@@ -96,14 +96,18 @@ Neither database is deployed or exposed by the website.
 ```sh
 python3 -m unittest discover -s pipeline -p 'test_*.py'
 node --check site/app.js
-python3 -m http.server 8765 --bind 127.0.0.1 --directory site
-# In another terminal, with Playwright and Chrome available:
 node tests/site.test.cjs
+node tests/curation.test.cjs
+node tests/media.test.cjs
+node tests/resolution.test.cjs
+node tests/viewer.test.cjs
 ```
 
 The browser check covers keyboard access, filters, routes, board persistence,
 exports, comparison state, mobile layout, and load/storage failures. It uses
-an isolated browser profile. It does not mutate the live site.
+an isolated browser profile and an in-memory local route, so it needs no preview
+server or listening port. Set `CATALOG_TEST_URL` to test a deployed preview.
+It does not mutate the live site.
 
 ## License
 
@@ -137,3 +141,27 @@ Review source images before adding tags. Keep the source URL and review date.
 
 The initial library includes 7 collections and 25 UI elements from 7 apps.
 These are manual visual annotations, not Jev classification output.
+
+## Search reference pages
+
+Run `python3 pipeline/build_search_pages.py` after refreshing the catalog. CI
+runs it before each deploy. It builds HTML app references, an app directory,
+reviewed-pattern and collection pages, source FAQs, sitemap.xml, robots.txt,
+and llms.txt from the current snapshot. Generated pages are not committed.
+The interactive hash routes remain available; crawlable pages use stable paths.
+
+## Automatic additions and refreshes
+
+The existing GitHub Actions **Update catalog** workflow runs daily (scheduled for 06:17 UTC; GitHub may start it later). It pulls up to 100 free-chart entries for each of the eight categories in `pipeline/fetch.py` → `GENRES`. An app newly entering a tracked chart is added on the next successful refresh. Apps leaving those charts leave the current chart catalog. This is a US free-app chart catalog, not a revenue ranking.
+
+The importer retains up to ten available iPhone listing screenshots per app, records actual per-category feed counts and added/removed app IDs in `coverage`, uploads only media hashes absent from the previous published snapshot to R2, and only then replaces the snapshot. Empty chart or metadata responses abort the refresh. Reviewed element/collection images are pinned in `site/curation.json`, so changing App Store images does not silently erase that research.
+
+An app present in more than one category chart appears once in the catalog and remains discoverable in each category with its original rank for that feed. `coverage.categoryCoverage` records both chart entries and resolved catalog apps per category.
+
+To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
+
+Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. Accounts, cloud board sync, and shared boards are not implemented in the current static catalog.
+
+### Screenshot resolution
+
+The viewer requests Apple’s 1290 × 2796 bounding-box variant, while Retina grids request a smaller 640 × 1386 variant. Apple preserves each source image’s proportions and available resolution. Cached R2 previews remain the fallback. New imports retain `fullSizeUrl`; `site/image-sources.json` maps verified historical screenshot hashes to the same Apple source asset without changing saved reference IDs.

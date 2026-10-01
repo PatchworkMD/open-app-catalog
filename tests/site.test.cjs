@@ -1,14 +1,15 @@
-// Run against the local preview: node tests/site.test.cjs
+// Run with the in-memory local preview route: node tests/site.test.cjs
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const {catalogBase} = require('./browser-fixture.cjs');
 (async () => {
   const browser = await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
   const page = await browser.newPage({viewport:{width:1440,height:1000}});
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  const base = process.env.CATALOG_TEST_URL || 'http://127.0.0.1:8765/';
+  const base = await catalogBase(page);
   const evidence = await fs.mkdtemp(path.join(os.tmpdir(),'hugging-app-qa-'));
   try {
     await page.goto(base + '#apps');
@@ -56,14 +57,16 @@ const path = require('node:path');
     await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({path:path.join(evidence,'mobile.png')});
-    await page.goto(base + '#plugin'); await page.locator('.doc h2').waitFor();
+    await page.goto(base + '#plugin'); await page.locator('#content .doc h2').waitFor();
     await page.screenshot({path:path.join(evidence,'plugin.png')});
     const blocked = await browser.newPage();
-    await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));
+    await catalogBase(blocked);
+    await blocked.route('**/data.json',route => route.fulfill({status:503}));
     await blocked.goto(base); await blocked.getByRole('button',{name:'Try again'}).waitFor();
     assert.equal(await blocked.locator('#export').isEnabled(),false);
     await blocked.close();
     const storage = await browser.newPage();
+    await catalogBase(storage);
     await storage.addInitScript(() => { Storage.prototype.setItem = () => {throw new Error('denied')}; });
     await storage.goto(base + '#screens'); await storage.locator('[data-save]').first().click();
     assert.match(await storage.locator('#status').textContent(),/Storage unavailable/);
