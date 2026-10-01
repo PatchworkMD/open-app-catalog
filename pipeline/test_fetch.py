@@ -13,6 +13,22 @@ SPEC.loader.exec_module(fetch)
 
 
 class BuildTest(unittest.TestCase):
+    def test_curated_screen_flags_follow_the_refreshed_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data.json").write_text(json.dumps({"apps": [], "screens": []}))
+            (root / "curation.json").write_text(json.dumps({"screens": [
+                {"id": "in-snapshot", "path": "assets/in-snapshot.png", "curatedOnly": True},
+                {"id": "curated-only", "path": "assets/curated-only.png"},
+            ]}))
+            snapshot = {"apps": [{"id": "a"}], "screens": [{"id": "in-snapshot", "path": "assets/in-snapshot.png"}]}
+            with patch.object(fetch, "SITE_DIR", root), patch.object(fetch, "build", return_value=snapshot), \
+                 patch.dict(fetch.os.environ, {"CATALOG_R2_UPLOAD": ""}):
+                fetch.main()
+            screens = json.loads((root / "curation.json").read_text())["screens"]
+            self.assertNotIn("curatedOnly", screens[0])
+            self.assertTrue(screens[1]["curatedOnly"])
+
     def test_screenshot_keeps_stable_id_and_adds_full_resolution_source(self):
         saved = {"id": "stable", "path": "assets/stable.jpg"}
         with patch.object(fetch, "save_image", return_value=saved.copy()):
@@ -41,9 +57,33 @@ class BuildTest(unittest.TestCase):
 
         self.assertEqual([(app["id"], app["chartRank"]) for app in result["apps"]],
                          [("a", 1), ("b", 2), ("c", 2), ("d", 3)])
+        overlapping = next(app for app in result["apps"] if app["id"] == "b")
+        self.assertEqual(overlapping["categories"], ["One", "Two"])
+        self.assertEqual(overlapping["chartRanks"], {"One": 2, "Two": 1})
+        self.assertEqual([item["catalogApps"] for item in result["coverage"]["categoryCoverage"]], [2, 3])
         self.assertEqual(result["coverage"]["rankBasis"], "original-category-feed")
         self.assertEqual(result["coverage"]["chartStore"], "us")
         self.assertEqual(result["coverage"]["chartType"], "topfreeapplications")
+
+    def test_overlapping_full_charts_retain_one_hundred_apps_per_category(self):
+        feeds = {"one": [str(i) for i in range(100)], "two": [str(i) for i in range(99, 199)]}
+        details = {app_id: {"trackId": app_id, "trackName": app_id}
+                   for app_id in {app_id for ids in feeds.values() for app_id in ids}}
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+             patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+             patch.object(fetch, "fetch_chart_ids", side_effect=lambda genre: feeds[genre]), \
+             patch.object(fetch, "lookup_apps", side_effect=lambda ids: [details[i] for i in ids]), \
+             patch.object(fetch, "save_screenshot", return_value=None), \
+             patch.object(fetch, "save_image", return_value=None), \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+
+        self.assertEqual(len(result["apps"]), 199)
+        self.assertEqual([item["catalogApps"] for item in result["coverage"]["categoryCoverage"]], [100, 100])
+        shared = next(app for app in result["apps"] if app["id"] == "99")
+        self.assertEqual(shared["chartRanks"], {"One": 100, "Two": 1})
 
     def test_empty_category_aborts_refresh(self):
         with tempfile.TemporaryDirectory() as tmp, \
@@ -52,6 +92,28 @@ class BuildTest(unittest.TestCase):
              patch.object(fetch, "fetch_chart_ids", return_value=[]):
             with self.assertRaisesRegex(RuntimeError, "Empty chart"):
                 fetch.build()
+
+    def test_empty_later_chart_preserves_previous_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "data.json"
+            previous = '{"prior": "snapshot"}\n'
+            out.write_text(previous)
+            feeds = iter([["first-app"], []])
+            details = [{"trackId": "first-app", "trackName": "First app"}]
+            with patch.object(fetch, "SITE_DIR", root), \
+                 patch.object(fetch, "ASSETS_DIR", root / "assets"), \
+                 patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+                 patch.object(fetch, "fetch_chart_ids", side_effect=lambda _genre: next(feeds)), \
+                 patch.object(fetch, "lookup_apps", return_value=details), \
+                 patch.object(fetch, "save_screenshot", return_value={"id": "screen", "path": "assets/screen.png"}), \
+                 patch.object(fetch, "save_image", return_value={"path": "assets/icon.png"}), \
+                 patch.object(fetch.time, "sleep"):
+                with self.assertRaisesRegex(RuntimeError, "Empty chart for Two"):
+                    fetch.main()
+
+            self.assertEqual(out.read_text(), previous)
+            self.assertFalse(out.with_suffix(".json.tmp").exists())
 
     def test_refresh_keeps_all_ten_listing_screens(self):
         details = [{"trackId": "a", "trackName": "App", "screenshotUrls": [str(i) for i in range(10)]}]
@@ -90,6 +152,25 @@ class BuildTest(unittest.TestCase):
                 fetch.upload_new_assets(data, previous)
             self.assertEqual(run.call_count, 1)
             self.assertIn('open-app-catalog-assets/assets/new.png', run.call_args.args[0])
+
+    def test_partial_lookup_keeps_earlier_category_membership_and_coverage(self):
+        feeds = iter([["a", "shared"], ["shared", "b"]])
+        lookups = iter([
+            [{"trackId": "a", "trackName": "A"}],
+            [{"trackId": "shared", "trackName": "Shared"},
+             {"trackId": "b", "trackName": "B"}],
+        ])
+        with patch.object(fetch, "GENRES", {"one": ("One", 1), "two": ("Two", 1)}), \
+             patch.object(fetch, "fetch_chart_ids", side_effect=lambda _genre: next(feeds)), \
+             patch.object(fetch, "lookup_apps", side_effect=lambda _ids: next(lookups)), \
+             patch.object(fetch, "save_image", return_value=None), \
+             patch.object(fetch.time, "sleep"):
+            result = fetch.build()
+
+        shared = next(app for app in result["apps"] if app["id"] == "shared")
+        self.assertEqual(shared["categories"], ["One", "Two"])
+        self.assertEqual(shared["chartRanks"], {"One": 2, "Two": 1})
+        self.assertEqual([row["catalogApps"] for row in result["coverage"]["categoryCoverage"]], [2, 2])
 
     def test_upload_error_does_not_replace_dataset(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -157,8 +157,8 @@ dialog::backdrop{background:rgba(5,6,7,.75);backdrop-filter:blur(6px)}
 .detail-shot{margin:0}.detail-shot figcaption{color:var(--muted);font-size:13px;padding:10px 0}
 .app-detail-summary{padding:0 0 4px}.app-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:18px;align-items:start;padding-bottom:18px}
 .app-detail-card{min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-.app-detail-image{display:grid;place-items:center;width:100%;height:min(70vh,780px);padding:12px;border:0;background:var(--bg)}
-.app-detail-image img{display:block;width:100%;height:100%;object-fit:contain}
+.app-detail-image{display:grid;place-items:center;width:100%;height:min(70vh,780px);padding:12px;border:0;background:var(--bg);overflow:hidden}
+.app-detail-image img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;min-width:0;min-height:0;object-fit:contain}
 .app-detail-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;color:var(--muted);font-size:12px}
 .app-detail-caption .pinactions{display:flex;margin:0}
 .comparegrid{display:flex;gap:20px;overflow:auto}
@@ -192,7 +192,7 @@ footer{padding:var(--sp-6) 4vw;color:var(--muted);font-size:12px;border-top:1px 
   .doc{font-size:16px}
 }
 
-@media(max-width:600px){dialog{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;padding:16px}.app-gallery{grid-template-columns:1fr;gap:12px}.app-detail-image{height:65dvh}.detailmedia{height:calc(100dvh - 150px);max-height:78dvh}}
+@media(max-width:600px){dialog{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;padding:16px}.app-gallery{grid-template-columns:1fr;gap:12px}.app-detail-image{height:min(52vh,420px)}.detailmedia{height:calc(100dvh - 150px);max-height:78dvh}}
 
 @media(prefers-reduced-motion:reduce){
   *{scroll-behavior:auto!important;animation:none!important;transition-property:color,background-color,border-color,opacity!important;transition-duration:.1s!important;transition-delay:0s!important}

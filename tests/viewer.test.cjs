@@ -19,7 +19,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
     assert((await cards.count()) >= 2);
     const galleryWidth = await page.locator('.app-gallery').evaluate(el => el.getBoundingClientRect().width);
     const dialogWidth = await dialog.evaluate(el => el.getBoundingClientRect().width);
-    assert(galleryWidth > dialogWidth * .8);
+    assert(galleryWidth >= dialogWidth - 50, 'the gallery should fill the dialog content width');
     assert.equal(await page.getByRole('button',{name:'Close viewer'}).isVisible(),true);
     await page.screenshot({path:'/tmp/hugging-app-app-detail.png',animations:'disabled'});
     await page.locator('#viewerContent').evaluate(el => el.scrollTop = el.scrollHeight);

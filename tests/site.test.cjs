@@ -61,7 +61,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
     await page.screenshot({path:path.join(evidence,'plugin.png')});
     const blocked = await browser.newPage();
     await catalogBase(blocked);
-    await blocked.route('**/data.json',route => route.fulfill({status:503,body:'Unavailable'}));
+    await blocked.route('**/data.json',route => route.fulfill({status:503}));
     await blocked.goto(base); await blocked.getByRole('button',{name:'Try again'}).waitFor();
     assert.equal(await blocked.locator('#export').isEnabled(),false);
     await blocked.close();

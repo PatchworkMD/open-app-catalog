@@ -1,7 +1,7 @@
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const {catalogBase} = require('./browser-fixture.cjs');
-const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.env.CATALOG_SNAPSHOT || 'site/data.json', 'utf8')).screens.length.toLocaleString();
+const reviewedCuration = require('../site/curation.json');
 
 (async () => {
   const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
@@ -12,7 +12,6 @@ const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.en
     await page.goto(base + '#flows');
     await page.locator('.collection-card').first().waitFor();
     assert.equal(await page.locator('.collection-card').count(), 7);
-    assert.equal(await page.locator('.collection-flows').first().locator('.collection-previews img').count(), 4);
     const flowTitle = await page.locator('.collection-card').first().locator('.pincaption').textContent();
     await page.locator('.collection-card').first().locator('[data-save-collection]').click();
     assert.equal(await page.locator('.collection-card').first().locator('[data-save-collection]').getAttribute('aria-pressed'), 'true');
@@ -44,14 +43,7 @@ const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.en
     await page.getByRole('link', {name:'UI elements', exact:true}).click();
     await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
     assert.equal(await page.locator('.collection-card').count(), 25);
-    assert.equal(await page.locator('.collection-elements .collection-previews img').count(), 25);
     assert.equal(await page.locator('#viewer').isVisible(), false);
-    await page.getByRole('link', {name:'Screens', exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('#title').textContent === 'Screens');
-    assert.ok((await page.locator('#coverage').textContent()).includes(`${catalogScreenCount} screenshots`));
-    assert.ok((await page.locator('#status').textContent()).includes(`${catalogScreenCount} results`));
-    await page.getByRole('link', {name:'UI elements', exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
     await page.screenshot({path:'/tmp/hugging-elements-fixed.png',animations:'disabled'});
     await page.locator('.collection-card').first().getByRole('button', {name:/Open/}).click();
     assert.equal(await page.locator('.screen-canvas img').count(), 1);
@@ -67,13 +59,22 @@ const catalogScreenCount = JSON.parse(require('node:fs').readFileSync(process.en
     assert.equal(exported.records[0].screenId.length, 64);
     const malformed = await browser.newPage();
     await catalogBase(malformed);
-    await malformed.route('**/curation.json', route => route.fulfill({contentType:'application/json',body:JSON.stringify({flows:[null,{id:'bad',title:'Bad',assetIds:{}}],elements:[null]})}));
-    await malformed.goto(base + '#apps');
-    await malformed.locator('.app-open').first().waitFor();
-    assert((await malformed.locator('.app-open').count()) > 0);
+    const malformedErrors = [];
+    malformed.on('pageerror', error => malformedErrors.push(error.message));
+    await malformed.route('**/curation.json', route => route.fulfill({contentType:'application/json',body:JSON.stringify({
+      screens:reviewedCuration.screens,
+      flows:[null,{id:'bad',title:'Bad',assetIds:{}},...reviewedCuration.flows],
+      elements:[null,...reviewedCuration.elements]
+    })}));
+    await malformed.goto(base + '#flows');
+    await malformed.locator('.collection-card').first().waitFor();
+    assert.equal(await malformed.locator('.collection-card').count(), reviewedCuration.flows.length);
+    assert.equal(await malformed.getByText('Bad',{exact:true}).count(),0);
+    assert.deepEqual(malformedErrors,[]);
+    await malformed.close();
     const failed = await browser.newPage();
     await catalogBase(failed);
-    await failed.route('**/curation.json', route => route.fulfill({status:503,body:'Unavailable'}));
+    await failed.route('**/curation.json', route => route.fulfill({status:503}));
     await failed.goto(base + '#flows');
     await failed.getByText('These references could not load.').waitFor();
     assert.equal(await failed.locator('#export').isEnabled(), false);

@@ -13,15 +13,18 @@ class SearchPagesTest(unittest.TestCase):
             sid = 'a' * 64
             title = 'Example </script><script>alert(1)</script>'
             data = {'coverage': {'generatedAt': '2026-09-21T10:00:00Z'}, 'apps': [
-                {'id': '123', 'name': title, 'category': 'Productivity', 'assetIds': [sid], 'url': 'https://apps.apple.com/us/app/example/id123'}
+                {'id': '123', 'name': title, 'category': 'Productivity', 'categories': ['Productivity', 'Lifestyle'], 'assetIds': [sid], 'url': 'https://apps.apple.com/us/app/example/id123'}
             ], 'screens': [{'id': sid, 'title': title, 'path': f'assets/{sid}.jpg'}]}
             (root / 'data.json').write_text(json.dumps(data))
             self.assertEqual(build(root), 5)
             page = (root / 'apps/123/index.html').read_text()
             self.assertIn('https://apps.apple.com/us/app/example/id123', page)
             self.assertIn('rel="canonical" href="https://catalog.patchworkmd.dev/apps/123/"', page)
+            self.assertIn('/style.css?v=20261001-catalog-refresh', page)
+            self.assertIn('/references.css?v=20261001-catalog-refresh', page)
             self.assertNotIn('<script>alert(1)</script>', page)
             self.assertIn('&lt;script&gt;', page)
+            self.assertIn('Productivity · Lifestyle', page)
             sitemap = ET.fromstring((root / 'sitemap.xml').read_text())
             urls = [item.text for item in sitemap.findall('.//{*}loc')]
             self.assertIn('https://catalog.patchworkmd.dev/apps/123/', urls)

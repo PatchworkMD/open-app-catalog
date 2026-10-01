@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 BASE = 'https://catalog.patchworkmd.dev'
+ASSET_VERSION = '20261001-catalog-refresh'
 ROOT = Path(__file__).resolve().parents[1] / 'site'
 
 def esc(value):
@@ -36,7 +37,7 @@ def document(title, description, path, body, modified):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)} | Hugging App</title><meta name="description" content="{esc(description)}"><link rel="canonical" href="{BASE}{path}">
 <meta property="og:type" content="website"><meta property="og:title" content="{esc(title)} | Hugging App"><meta property="og:description" content="{esc(description)}"><meta property="og:url" content="{BASE}{path}"><meta property="og:image" content="{BASE}/brand/hugging-app.png"><meta name="twitter:card" content="summary"><meta name="twitter:image" content="{BASE}/brand/hugging-app.png">
-<link rel="icon" href="/brand/hugging-app.png"><link rel="stylesheet" href="/style.css?v=20260923-motion"><link rel="stylesheet" href="/references.css?v=20260923-motion"><script type="application/ld+json">{encoded}</script></head>
+<link rel="icon" href="/brand/hugging-app.png"><link rel="stylesheet" href="/style.css?v={ASSET_VERSION}"><link rel="stylesheet" href="/references.css?v={ASSET_VERSION}"><script type="application/ld+json">{encoded}</script></head>
 <body><header><a class="brand" href="/"><img class="brandmark" src="/brand/hugging-app.png" width="34" height="34" alt="">Hugging App</a><nav aria-label="Main navigation"><a href="/apps/">Apps</a><a href="/ui-elements/">UI elements</a><a href="/flows/">Collections</a><a href="/about/">About &amp; sources</a><a href="/#apps">Interactive catalog</a></nav></header>
 <main class="reference-page">{body}</main><footer>By PatchworkMD · Snapshot {esc(modified)} · Screenshots and trademarks belong to their owners. <a href="/about/">Sources and limitations</a> · <a href="https://github.com/PatchworkMD/open-app-catalog">Source code</a></footer></body></html>'''
 
@@ -65,7 +66,8 @@ def build(root=ROOT):
         related = [screens[sid] for sid in app.get('assetIds',[]) if sid in screens]
         if not source or not related:
             continue
-        name, category = app['name'], app.get('category','App Store')
+        name = app['name']
+        category = ' · '.join(app.get('categories') or [app.get('category','App Store')])
         path = f'/apps/{app_id}/'
         title = f'{name}: iOS app screenshots'
         description = f'Explore {len(related)} developer-published {name} screenshots in {category}. Compare interface references and view the original App Store listing.'

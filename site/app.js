@@ -1,9 +1,16 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const categoriesForApp = app => Array.isArray(app.categories) && app.categories.length ? app.categories : [app.category].filter(Boolean);
+const catalogCategories = () => [...new Set([
+  ...data.apps.flatMap(categoriesForApp),
+  ...data.screens.map(x => x.category),
+  ...data.flows.map(x => x.category),
+  ...data.elements.map(x => x.category)
+].filter(Boolean))].sort();
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
-let viewerState = null, curationState = 'loading', resolutionMap = {};
-let data, catalogScreenCount = 0, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
+let viewerState = null, curationState = 'loading', resolutionMap = {}, catalogScreenCount = 0;
+let data, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
@@ -14,30 +21,24 @@ function media(s, fullSize = false) {
   const p = String(s.path || '');
   return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
-function handleMediaLoad(image) {
-  image.classList.add('loaded');
-}
 function handleMediaError(image) {
   const preview = image.dataset.preview;
   const source = image.currentSrc || image.getAttribute('src') || '';
-  const isAppleImage = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\//.test(source);
-  if (preview && isAppleImage && image.dataset.previewAttempted !== 'true') {
-    image.dataset.previewAttempted = 'true';
-    image.removeAttribute('srcset');
-    image.src = preview;
-    return;
+  if (preview && /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\//.test(source) && image.dataset.previewAttempted !== 'true') {
+    image.dataset.previewAttempted = 'true'; image.removeAttribute('srcset'); image.src = preview; return;
   }
-  image.replaceWith(Object.assign(document.createElement('span'), {className:'media-unavailable', textContent:'Image unavailable'}));
+  image.replaceWith(Object.assign(document.createElement('span'), {className:'media-unavailable',textContent:'Image unavailable'}));
 }
 document.addEventListener('load', event => {
-  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) handleMediaLoad(event.target);
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) event.target.classList.add('loaded');
 }, true);
 document.addEventListener('error', event => {
   if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) handleMediaError(event.target);
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-icon')) event.target.replaceWith(Object.assign(document.createElement('div'), {className:'icon-ph'}));
 }, true);
 function appIcon(x) {
   const p = String(x.iconPath || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" src="${esc(p)}" loading="eager" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'icon-ph'}))">` : '<div class="icon-ph"></div>';
+  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" data-catalog-icon src="${esc(p)}" loading="eager" alt="">` : '<div class="icon-ph"></div>';
 }
 function screenCard(s) {
   return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
@@ -55,26 +56,33 @@ function curationCard(x, kind) {
 }
 function appCard(x) {
   const shot = data.screens.find(s => (x.assetIds || []).includes(s.id));
-  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(x.chartRank) ? `<span class="pinrank">#${x.chartRank} in ${esc(x.category)}</span>` : '';
-  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(x.category || 'App Store')}</span></button></article>`;
+  const selectedCategory = $('#category').value;
+  const category = selectedCategory || x.category || 'App Store';
+  const chartRank = x.chartRanks?.[category] ?? x.chartRank;
+  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(chartRank) ? `<span class="pinrank">#${chartRank} in ${esc(category)}</span>` : '';
+  const labels = selectedCategory ? [selectedCategory] : categoriesForApp(x);
+  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(labels.join(' · ') || 'App Store')}</span></button></article>`;
 }
 function appDetailCard(s, index, appId) {
   return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
 }
 function matchesFilters(x) {
   const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
-  return (!q || [x.name,x.title,x.category,x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || x.category === cat);
+  return (!q || [x.name,x.title,x.category,...(Array.isArray(x.categories) ? x.categories : []),x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || (x.categories ? categoriesForApp(x).includes(cat) : x.category === cat));
 }
 function filtered(items) {
   const out = items.filter(matchesFilters);
   if ($('#sort').value === 'name') out.sort((a,b) => (a.name || a.title || '').localeCompare(b.name || b.title || ''));
-  else if (data.coverage?.rankBasis === 'original-category-feed') out.sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999));
+  else if (data.coverage?.rankBasis === 'original-category-feed') {
+    const category = $('#category').value;
+    out.sort((a,b) => ((a.chartRanks?.[category] ?? a.chartRank) ?? 999) - ((b.chartRanks?.[category] ?? b.chartRank) ?? 999));
+  }
   return out;
 }
 function currentItems() {
-  const currentRoute = route();
-  const items = currentRoute === 'boards' ? data.screens.filter(s => board.includes(s.id)) : currentRoute === 'screens' ? data.screens.filter(s => !s.curatedOnly) : data[currentRoute] || [];
-  return filtered(items);
+  const r = route();
+  const items = r === 'boards' ? data.screens.filter(s => board.includes(s.id)) : data[r] || [];
+  return filtered(r === 'screens' ? items.filter(s => !s.curatedOnly) : items);
 }
 function currentBoardCollections() {
   return [
@@ -124,7 +132,7 @@ function render() {
   $('#controls').hidden = informational; $('#export').hidden = informational;
   $('#kind').disabled = true;
   const built = new Date(data.coverage?.generatedAt);
-  $('#coverage').textContent = `${data.apps.length.toLocaleString()} apps · ${catalogScreenCount.toLocaleString()} screenshots · Snapshot ${Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString()} · US App Store`;
+  $('#coverage').textContent = `${data.apps.length.toLocaleString()} apps · ${data.screens.length.toLocaleString()} screenshots · Snapshot ${Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString()} · US App Store`;
   $('#compareCount').textContent = selected.size;
   if (informational) { $('#content').className = ''; $('#content').innerHTML = r === 'plugin' ? pluginDocs() : docs(); $('#status').textContent = ''; $('#more').hidden = true; return; }
   if (['flows','elements'].includes(r) && curationState !== 'ready') {
@@ -174,7 +182,7 @@ function openApp(app, focusScreenId = null) {
   $('#viewerTitle').textContent = app.name;
   const links = [sourceLink(app.url), `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>`].filter(Boolean).join(' · ');
   const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
-  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(app.category || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
+  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(categoriesForApp(app).join(' · ') || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
   const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
   $('#viewerContent').innerHTML = summary + gallery;
   if (!$('#viewer').open) $('#viewer').showModal();
@@ -280,7 +288,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   data = d;
   for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
   catalogScreenCount = data.screens.length;
-  const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+  const cats = catalogCategories();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
   fillHero(); render(); $('#export').disabled = false;
   loadCuration();
@@ -298,7 +306,7 @@ async function loadCuration() {
     if (!curation || !Array.isArray(curation.flows) || !Array.isArray(curation.elements)) throw Error('Invalid reviewed library');
     mergeCuration(curation);
     const category = $('#category').value;
-    const cats = [...new Set([...data.apps,...data.screens,...data.flows,...data.elements].map(x => x.category).filter(Boolean))].sort();
+    const cats = catalogCategories();
     $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
     $('#category').value = category;
     curationState = 'ready'; fillHero();

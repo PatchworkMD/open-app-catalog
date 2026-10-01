@@ -139,7 +139,8 @@ def build() -> dict:
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     apps: list[dict] = []
     screens: list[dict] = []
-    seen_ids: set[str] = set()
+    apps_by_id: dict[str, dict] = {}
+    chart_memberships: dict[str, dict[str, int]] = {}
     category_coverage: list[dict] = []
 
     for genre_id, (label, _arpu) in GENRES.items():
@@ -147,20 +148,24 @@ def build() -> dict:
         feed_ids = fetch_chart_ids(genre_id)[:CHART_LIMIT]
         if not feed_ids:
             raise RuntimeError(f"Empty chart for {label}; preserving previous catalog")
-        category_coverage.append({"id": genre_id, "name": label, "chartEntries": len(feed_ids), "target": CHART_LIMIT})
-        rank_by_id = {app_id: rank + 1 for rank, app_id in enumerate(feed_ids)}
-        chart_ids = [i for i in feed_ids if i not in seen_ids]
-        seen_ids.update(chart_ids)
-        if not chart_ids:
-            continue
-        details = lookup_apps(chart_ids)
-        if not details:
+        coverage = {"id": genre_id, "name": label, "chartEntries": len(feed_ids), "catalogApps": 0, "target": CHART_LIMIT}
+        category_coverage.append(coverage)
+        rank_by_id: dict[str, int] = {}
+        for rank, app_id in enumerate(feed_ids, start=1):
+            rank_by_id.setdefault(app_id, rank)
+        for app_id, rank in rank_by_id.items():
+            chart_memberships.setdefault(app_id, {})[label] = rank
+        chart_ids = [app_id for app_id in rank_by_id if app_id not in apps_by_id]
+        details = lookup_apps(chart_ids) if chart_ids else []
+        if chart_ids and not details:
             raise RuntimeError(f"No app metadata for {label}; preserving previous catalog")
         for d in details:
             app_id = str(d.get("trackId", ""))
-            if not app_id:
+            if not app_id or app_id not in rank_by_id or app_id in apps_by_id:
                 continue
-            rank = rank_by_id.get(app_id, CHART_LIMIT)
+            app_chart_ranks = chart_memberships[app_id]
+            category = next(iter(app_chart_ranks))
+            rank = app_chart_ranks[category]
             asset_ids = []
             for shot_url in (d.get("screenshotUrls") or [])[:SCREENSHOTS_PER_APP]:
                 saved = save_screenshot(shot_url)
@@ -171,7 +176,7 @@ def build() -> dict:
                     {
                         "id": saved["id"],
                         "title": d.get("trackName", "Screen reference"),
-                        "category": label,
+                        "category": category,
                         "kind": "image",
                         "path": saved["path"],
                         "fullSizeUrl": saved.get("fullSizeUrl"),
@@ -180,22 +185,34 @@ def build() -> dict:
                 )
             icon_url = d.get("artworkUrl512") or d.get("artworkUrl100") or d.get("artworkUrl60")
             saved_icon = save_image(icon_url) if icon_url else None
-            apps.append(
-                {
-                    "id": app_id,
-                    "name": d.get("trackName", "Unknown"),
-                    "nameBasis": "App Store Lookup API",
-                    "url": d.get("trackViewUrl"),
-                    "category": label,
-                    "chartRank": rank,
-                    "rating": d.get("averageUserRating"),
-                    "ratingCount": d.get("userRatingCount"),
-                    "assetIds": asset_ids,
-                    "iconPath": saved_icon["path"] if saved_icon else None,
-                    "revenueLabel": estimate_revenue(rank, label),
-                }
-            )
+            app = {
+                "id": app_id,
+                "name": d.get("trackName", "Unknown"),
+                "nameBasis": "App Store Lookup API",
+                "url": d.get("trackViewUrl"),
+                "category": category,
+                "categories": list(app_chart_ranks),
+                "chartRank": rank,
+                "chartRanks": dict(app_chart_ranks),
+                "rating": d.get("averageUserRating"),
+                "ratingCount": d.get("userRatingCount"),
+                "assetIds": asset_ids,
+                "iconPath": saved_icon["path"] if saved_icon else None,
+                "revenueLabel": estimate_revenue(rank, category),
+            }
+            apps.append(app)
+            apps_by_id[app_id] = app
+        for app_id, rank in rank_by_id.items():
+            app = apps_by_id.get(app_id)
+            if app:
+                if label not in app["categories"]:
+                    app["categories"].append(label)
+                app["chartRanks"][label] = rank
         time.sleep(1)
+
+    for category in category_coverage:
+        label = category["name"]
+        category["catalogApps"] = sum(label in app["categories"] for app in apps)
 
     coverage = {
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -240,13 +257,26 @@ def upload_new_assets(data: dict, previous: dict | None = None) -> None:
         list(pool.map(upload, names))
 
 
+def reconcile_curated_screens(data: dict, curation: dict) -> dict:
+    catalog_ids = {screen["id"] for screen in data.get("screens", []) if screen.get("id")}
+    for screen in curation.get("screens", []):
+        if screen.get("id") in catalog_ids:
+            screen.pop("curatedOnly", None)
+        else:
+            screen["curatedOnly"] = True
+    return curation
+
+
 def main() -> None:
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     data = build()
     if not data["apps"] or not data["screens"]:
         raise RuntimeError("catalog build returned an empty snapshot")
     out = SITE_DIR / "data.json"
+    curation_out = SITE_DIR / "curation.json"
     previous = json.loads(out.read_text()) if out.exists() else {}
+    curation = json.loads(curation_out.read_text()) if curation_out.exists() else {}
+    reconcile_curated_screens(data, curation)
     old_ids = {str(app['id']) for app in previous.get('apps', [])}
     new_ids = {str(app['id']) for app in data['apps']}
     data.setdefault('coverage', {})['changes'] = {
@@ -255,10 +285,26 @@ def main() -> None:
     }
     upload_new_assets(data, previous)
     temp = out.with_suffix(".json.tmp")
+    curation_temp = curation_out.with_suffix(".json.tmp")
     temp.write_text(json.dumps(data, indent=2, sort_keys=True))
+    curation_temp.write_text(json.dumps(curation, indent=2))
     temp.replace(out)
+    curation_temp.replace(curation_out)
     print(f"wrote {out} ({len(data['apps'])} apps, {len(data['screens'])} screens)")
 
 
+def reconcile_current_snapshot() -> None:
+    snapshot = json.loads((SITE_DIR / "data.json").read_text())
+    curation_path = SITE_DIR / "curation.json"
+    curation = json.loads(curation_path.read_text())
+    reconcile_curated_screens(snapshot, curation)
+    temp = curation_path.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(curation, indent=2))
+    temp.replace(curation_path)
+
+
 if __name__ == "__main__":
-    main()
+    if "--reconcile-only" in sys.argv[1:]:
+        reconcile_current_snapshot()
+    else:
+        main()
