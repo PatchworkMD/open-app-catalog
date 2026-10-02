@@ -231,10 +231,15 @@ def build() -> dict:
     return {"apps": apps, "screens": screens, "flows": [], "elements": [], "coverage": coverage}
 
 
-def upload_new_assets(data: dict, previous: dict | None = None) -> None:
+def upload_new_assets(data: dict, previous: dict | None = None, curation: dict | None = None) -> None:
     if os.environ.get("CATALOG_R2_UPLOAD") != "1":
         return
     names = {Path(item["path"]).name for item in data["screens"]}
+    names.update(
+        Path(item["path"]).name
+        for item in (curation or {}).get("screens", [])
+        if item.get("path")
+    )
     names.update(Path(app["iconPath"]).name for app in data["apps"] if app.get("iconPath"))
     missing = sorted(name for name in names if not (ASSETS_DIR / name).is_file())
     if missing:
@@ -267,6 +272,15 @@ def reconcile_curated_screens(data: dict, curation: dict) -> dict:
     return curation
 
 
+def preserve_curated_screens(data: dict, curation: dict) -> None:
+    curated_ids = {screen.get("id") for screen in curation.get("screens", []) if screen.get("id")}
+    if not curated_ids:
+        return
+    data["screens"] = [screen for screen in data.get("screens", []) if screen.get("id") not in curated_ids]
+    if isinstance(data.get("coverage"), dict):
+        data["coverage"]["screens"] = len(data["screens"])
+
+
 def main() -> None:
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     data = build()
@@ -276,6 +290,7 @@ def main() -> None:
     curation_out = SITE_DIR / "curation.json"
     previous = json.loads(out.read_text()) if out.exists() else {}
     curation = json.loads(curation_out.read_text()) if curation_out.exists() else {}
+    preserve_curated_screens(data, curation)
     reconcile_curated_screens(data, curation)
     old_ids = {str(app['id']) for app in previous.get('apps', [])}
     new_ids = {str(app['id']) for app in data['apps']}
@@ -283,7 +298,7 @@ def main() -> None:
         'addedAppIds': sorted(new_ids - old_ids),
         'removedAppIds': sorted(old_ids - new_ids),
     }
-    upload_new_assets(data, previous)
+    upload_new_assets(data, previous, curation)
     temp = out.with_suffix(".json.tmp")
     curation_temp = curation_out.with_suffix(".json.tmp")
     temp.write_text(json.dumps(data, indent=2, sort_keys=True))

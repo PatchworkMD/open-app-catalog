@@ -13,7 +13,7 @@ SPEC.loader.exec_module(fetch)
 
 
 class BuildTest(unittest.TestCase):
-    def test_curated_screen_flags_follow_the_refreshed_snapshot(self):
+    def test_curated_screens_remain_supplemental_across_refresh(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "data.json").write_text(json.dumps({"apps": [], "screens": []}))
@@ -21,13 +21,40 @@ class BuildTest(unittest.TestCase):
                 {"id": "in-snapshot", "path": "assets/in-snapshot.png", "curatedOnly": True},
                 {"id": "curated-only", "path": "assets/curated-only.png"},
             ]}))
-            snapshot = {"apps": [{"id": "a"}], "screens": [{"id": "in-snapshot", "path": "assets/in-snapshot.png"}]}
+            snapshot = {
+                "apps": [{"id": "a", "assetIds": ["in-snapshot"]}],
+                "screens": [
+                    {"id": "in-snapshot", "path": "assets/in-snapshot.png"},
+                    {"id": "fresh", "path": "assets/fresh.png"},
+                ],
+                "coverage": {"screens": 2},
+            }
             with patch.object(fetch, "SITE_DIR", root), patch.object(fetch, "build", return_value=snapshot), \
                  patch.dict(fetch.os.environ, {"CATALOG_R2_UPLOAD": ""}):
                 fetch.main()
+            data = json.loads((root / "data.json").read_text())
             screens = json.loads((root / "curation.json").read_text())["screens"]
-            self.assertNotIn("curatedOnly", screens[0])
+            self.assertEqual({screen["id"] for screen in data["screens"]}, {"fresh"})
+            self.assertEqual(data["coverage"]["screens"], 1)
+            self.assertEqual(data["apps"][0]["assetIds"], ["in-snapshot"])
+            self.assertTrue(screens[0]["curatedOnly"])
             self.assertTrue(screens[1]["curatedOnly"])
+
+    def test_curated_supplemental_assets_are_uploaded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = Path(tmp)
+            (assets / "curated.png").write_bytes(b"image")
+            with patch.object(fetch, "ASSETS_DIR", assets), \
+                 patch.dict(fetch.os.environ, {"CATALOG_R2_UPLOAD": "1"}), \
+                 patch.object(fetch.subprocess, "run") as run:
+                run.return_value.returncode = 0
+                fetch.upload_new_assets(
+                    {"apps": [], "screens": []},
+                    {},
+                    {"screens": [{"path": "assets/curated.png"}]},
+                )
+            run.assert_called_once()
+            self.assertIn("open-app-catalog-assets/assets/curated.png", run.call_args.args[0])
 
     def test_screenshot_keeps_stable_id_and_adds_full_resolution_source(self):
         saved = {"id": "stable", "path": "assets/stable.jpg"}
