@@ -707,7 +707,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/signal-private-messenger/id874139669?uo=4",
       "title": "Signal - Private Messenger",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
@@ -794,7 +795,8 @@
       "sourceUrl": "https://apps.apple.com/us/app/threads/id6446901002?uo=4",
       "title": "Threads",
       "reviewedAt": "2026-09-19",
-      "source": "site/data.json"
+      "source": "site/data.json",
+      "curatedOnly": true
     },
     {
       "category": "Social Networking",
