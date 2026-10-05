@@ -82,27 +82,5 @@ jobs:
       - name: Deploy Worker
         run: npx wrangler deploy
 
-      - name: Verify production catalog
-        run: |
-          python3 - <<'PY'
-          import json
-          import subprocess
-
-          origin = "https://open-app-catalog.austinwise-ev1e.workers.dev/"
-          public_base = "https://catalog.patchworkmd.dev/"
-          data = json.loads(subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", origin + "data.json"]))
-          path = data["screens"][0]["path"]
-          subprocess.run(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", "--output", "/dev/null", origin + path], check=True)
-          reference = "apps/" + str(data["apps"][0]["id"]) + "/"
-          page = subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", origin + reference]).decode()
-          if 'rel="canonical" href="' + public_base + reference + '"' not in page:
-              raise RuntimeError("Production reference page is missing its canonical URL")
-          public_data = json.loads(subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", public_base + "data.json"]))
-          if public_data.get("coverage", {}).get("generatedAt") != data.get("coverage", {}).get("generatedAt"):
-              raise RuntimeError("Public domain is serving a different catalog snapshot")
-          subprocess.run(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", "--output", "/dev/null", public_base + path], check=True)
-          public_page = subprocess.check_output(["curl", "--fail", "--silent", "--show-error", "--retry", "3", "--max-time", "20", public_base + reference]).decode()
-          if 'rel="canonical" href="' + public_base + reference + '"' not in public_page:
-              raise RuntimeError("Public reference page is missing its canonical URL")
-          print("Worker and public-domain catalog snapshots, media, and canonical reference page OK")
-          PY
+      - name: Verify deployed catalog through Worker origin
+        run: python3 pipeline/verify_deployment.py
