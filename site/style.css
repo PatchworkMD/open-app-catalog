@@ -210,6 +210,41 @@ footer{padding:var(--sp-6) 4vw;color:var(--muted);font-size:12px;border-top:1px 
 .hero h2,.hero p,.hero-cta{position:relative;z-index:1}
 .hero h2{text-shadow:0 2px 24px rgba(10,11,13,.85)}
 
+.account-nav{flex:none;min-height:42px;margin:0 6px 4px;padding:8px 12px;border-color:var(--line-strong);color:var(--text);font-size:13px}
+.account-dialog{inset:0;width:min(540px,calc(100vw - 32px));height:fit-content;min-height:0;max-height:min(82dvh,760px);margin:auto;flex:none;padding:22px;border:1px solid var(--line-strong);border-radius:18px;background:var(--surface);color:var(--text);box-shadow:0 28px 90px rgba(0,0,0,.55)}
+.account-dialog::backdrop{background:rgba(0,0,0,.7);backdrop-filter:blur(5px)}
+.account-dialog .dialogbar{margin-bottom:14px}
+.account-form{display:grid;gap:18px}
+.account-form form,.account-form label,.cloud-board-controls label,.cloud-share label,.invite-link label{display:grid;gap:8px}
+.account-form form{gap:12px}
+.account-form label,.cloud-board-controls label,.cloud-share label,.invite-link label{color:var(--muted);font-size:13px}
+.account-form input,.cloud-board-controls input,.cloud-board-controls select,.cloud-share input,.invite-link input{width:100%;box-sizing:border-box;background:var(--bg)}
+.account-form [data-ha="google"],.cloud-primary{width:100%;min-height:46px;border-color:transparent;background:linear-gradient(120deg,var(--accent),var(--accent-2));color:#11131a;font-weight:700}
+.cloud-actions{display:flex;gap:8px}
+.cloud-actions button{flex:1;min-height:44px}
+.text-action{justify-self:start;padding:4px 0;border:0;background:none;color:var(--muted);text-decoration:underline}
+.cloud-hub{column-span:all;display:block;box-sizing:border-box;width:100%;margin:0 0 24px;padding:22px;border:1px solid var(--line);border-radius:18px;background:color-mix(in srgb,var(--surface) 94%,transparent);break-inside:avoid}
+.cloud-hub-heading{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.cloud-hub h2{margin:0;font-size:24px}
+.cloud-hub h3{margin:0 0 10px;font-size:15px}
+.cloud-hub p{color:var(--muted);line-height:1.55}
+.cloud-hub .eyebrow{margin:0 0 6px;color:#b4b9c8;font-size:10px;font-weight:700;letter-spacing:.14em}
+.cloud-state{padding:6px 9px;border:1px solid var(--line-strong);border-radius:999px;color:#bbc5ff;font-size:10px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
+.cloud-note{color:var(--muted)}
+.cloud-board-controls,.cloud-share{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,1fr);gap:12px;margin:16px 0}
+.cloud-board-controls form,.cloud-share form{display:flex;align-items:end;gap:8px}
+.cloud-board-controls form label,.cloud-share form label{flex:1;min-width:0}
+.cloud-board-controls button,.cloud-share button,.cloud-lists button,.cloud-incoming button,.cloud-hub>button{min-height:42px}
+.cloud-lists{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:20px}
+.cloud-lists ul,.cloud-incoming ul{display:grid;gap:8px;padding:0;list-style:none}
+.cloud-lists li,.cloud-incoming li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+.cloud-lists li small{margin-left:6px;color:var(--muted)}
+.cloud-lists li button,.cloud-incoming li button{flex:none;padding:7px 10px;font-size:12px}
+.invite-link{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.invite-link a{color:#c2ceff}
+.cloud-incoming{margin-top:18px}
+@media(max-width:700px){.cloud-hub{padding:16px}.cloud-board-controls,.cloud-share,.cloud-lists{grid-template-columns:1fr}.cloud-board-controls form,.cloud-share form{align-items:stretch;flex-direction:column}.cloud-board-controls form button,.cloud-share form button{width:100%}.account-nav{padding:7px 10px}}
+
 /* hero art stays art: never let it fight the words */
 .hero::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,92%);height:min(420px,72%);background:radial-gradient(ellipse at center,rgba(10,11,13,.92) 0%,rgba(10,11,13,.72) 45%,transparent 72%);pointer-events:none;z-index:0}
 @media(max-width:700px){.hero{padding:72px 18px 64px}.float-card{width:78px;height:104px}.float-card.f5,.float-card.f6{display:none}.float-card:has(img){opacity:.32}.float-card.f1{top:4%;left:-2%}.float-card.f2{top:6%;right:-2%}.float-card.f3{bottom:4%;left:2%}.float-card.f4{bottom:4%;right:2%}.hero-logo{font-size:min(330px,78vw)}}

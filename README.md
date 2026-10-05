@@ -156,11 +156,13 @@ The existing GitHub Actions **Update catalog** workflow runs daily (scheduled fo
 
 The importer retains up to ten available iPhone listing screenshots per app, records actual per-category feed counts and added/removed app IDs in `coverage`, uploads only media hashes absent from the previous published snapshot to R2, and only then replaces the snapshot. Empty chart or metadata responses abort the refresh. Reviewed element/collection images are pinned in `site/curation.json`, so changing App Store images does not silently erase that research.
 
+Fresh media uploads finish before pinned reviewed screenshots are omitted from raw `data.json`. Those screenshots remain in `curation.json` and are merged into the browser's asset index, so app `assetIds` can resolve through either file. `coverage.screens` counts the raw snapshot, not the merged reviewed library.
+
 An app present in more than one category chart appears once in the catalog and remains discoverable in each category with its original rank for that feed. `coverage.categoryCoverage` records both chart entries and resolved catalog apps per category.
 
 To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
 
-Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. Accounts, cloud board sync, and shared boards are not implemented in the current static catalog.
+Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. The site source now supports optional Google/email accounts and private synced/shared boards in its separate `patchworkmd-hugging-app-prod` Firebase project. These features remain unavailable on production until Firebase setup, providers, database rules, and public Web App config are activated. Website accounts and boards are separate from the Hugging App plugin and its host-managed identity.
 
 ### Screenshot resolution
 

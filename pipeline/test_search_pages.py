@@ -31,6 +31,14 @@ class SearchPagesTest(unittest.TestCase):
             self.assertTrue(all('#' not in url for url in urls))
             self.assertIn('href="/apps/123/"', (root / 'apps/index.html').read_text())
             self.assertIn('Sitemap:', (root / 'robots.txt').read_text())
+            about = (root / 'about/index.html').read_text()
+            self.assertIn('How many apps are included?', about)
+            self.assertIn('up to 100 free apps in each supported US App Store category', about)
+            self.assertIn('Optional Google or email accounts and private shared boards require Firebase setup', about)
+            self.assertNotIn('There is no account sync', about)
+            llms = (root / 'llms.txt').read_text()
+            self.assertIn('up to 100 free apps per supported US App Store chart category', llms)
+            self.assertIn('private shared boards require Firebase setup', llms)
 
     def test_empty_input_does_not_replace_existing_pages(self):
         with tempfile.TemporaryDirectory() as directory:

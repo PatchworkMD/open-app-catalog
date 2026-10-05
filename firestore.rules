@@ -1,0 +1,267 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function verified() {
+      return request.auth != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function boardPath(boardId) {
+      return /databases/$(database)/documents/boards/$(boardId);
+    }
+
+    function memberPath(boardId, uid) {
+      return /databases/$(database)/documents/boards/$(boardId)/members/$(uid);
+    }
+
+    function identityPath(boardId) {
+      return /databases/$(database)/documents/boardIdentities/$(boardId);
+    }
+
+    function userBoardPath(uid, boardId) {
+      return /databases/$(database)/documents/users/$(uid)/boards/$(boardId);
+    }
+
+    function invitePath(inviteId) {
+      return /databases/$(database)/documents/boardInvites/$(inviteId);
+    }
+
+    function boardActive(boardId) {
+      return exists(boardPath(boardId))
+        && exists(identityPath(boardId))
+        && get(boardPath(boardId)).data.state == 'active'
+        && get(identityPath(boardId)).data.state == 'active'
+        && get(boardPath(boardId)).data.ownerUid == get(identityPath(boardId)).data.ownerUid;
+    }
+
+    function isMember(boardId) {
+      return verified()
+        && boardActive(boardId)
+        && exists(memberPath(boardId, request.auth.uid));
+    }
+
+    function isOwner(boardId) {
+      return isMember(boardId)
+        && get(boardPath(boardId)).data.ownerUid == request.auth.uid
+        && get(memberPath(boardId, request.auth.uid)).data.role == 'owner';
+    }
+
+    function personalIdAllowed(boardId) {
+      return !boardId.matches('^personal-.*$')
+        || boardId == 'personal-' + request.auth.uid;
+    }
+
+    function matchingIndexAfter(boardId, uid, role) {
+      return existsAfter(userBoardPath(uid, boardId))
+        && getAfter(userBoardPath(uid, boardId)).data.boardId == boardId
+        && getAfter(userBoardPath(uid, boardId)).data.role == role;
+    }
+
+    function matchingOwnerBootstrap(boardId, uid) {
+      return personalIdAllowed(boardId)
+        && existsAfter(boardPath(boardId))
+        && getAfter(boardPath(boardId)).data.ownerUid == uid
+        && getAfter(boardPath(boardId)).data.state == 'active'
+        && existsAfter(identityPath(boardId))
+        && getAfter(identityPath(boardId)).data.ownerUid == uid
+        && getAfter(identityPath(boardId)).data.state == 'active'
+        && existsAfter(memberPath(boardId, uid))
+        && getAfter(memberPath(boardId, uid)).data.uid == uid
+        && getAfter(memberPath(boardId, uid)).data.role == 'owner'
+        && existsAfter(userBoardPath(uid, boardId))
+        && getAfter(userBoardPath(uid, boardId)).data.boardId == boardId
+        && getAfter(userBoardPath(uid, boardId)).data.role == 'owner';
+    }
+
+    function acceptedInviteAfter(boardId, uid, inviteId) {
+      return inviteId is string
+        && exists(invitePath(inviteId))
+        && get(invitePath(inviteId)).data.status == 'pending'
+        && existsAfter(invitePath(inviteId))
+        && getAfter(invitePath(inviteId)).data.status == 'accepted'
+        && getAfter(invitePath(inviteId)).data.boardId == boardId
+        && getAfter(invitePath(inviteId)).data.ownerUid == getAfter(boardPath(boardId)).data.ownerUid
+        && getAfter(invitePath(inviteId)).data.acceptedByUid == uid
+        && getAfter(invitePath(inviteId)).data.inviteeEmail == request.auth.token.email.lower();
+    }
+
+    match /boards/{boardId} {
+      allow get: if isMember(boardId);
+      allow list: if false;
+      allow create: if verified()
+        && personalIdAllowed(boardId)
+        && !exists(identityPath(boardId))
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'title', 'createdAt', 'updatedAt', 'schemaVersion', 'state'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.state == 'active'
+        && matchingOwnerBootstrap(boardId, request.auth.uid);
+      allow update: if isOwner(boardId)
+        && resource.data.state == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['title', 'updatedAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get, list: if isMember(boardId);
+        allow create: if verified()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly([
+            'uid', 'email', 'role', 'joinedAt', 'inviteId'
+          ])
+          && request.resource.data.uid == uid
+          && request.resource.data.email == request.auth.token.email.lower()
+          && request.resource.data.joinedAt == request.time
+          && boardActiveAfter(boardId)
+          && matchingIndexAfter(boardId, uid, request.resource.data.role)
+          && (
+            (request.resource.data.role == 'owner'
+              && request.resource.data.inviteId == null
+              && getAfter(boardPath(boardId)).data.ownerUid == uid
+              && getAfter(identityPath(boardId)).data.ownerUid == uid)
+            ||
+            (request.resource.data.role == 'member'
+              && acceptedInviteAfter(boardId, uid, request.resource.data.inviteId))
+          );
+        allow update: if false;
+        allow delete: if isMember(boardId)
+          && uid != get(boardPath(boardId)).data.ownerUid
+          && !existsAfter(userBoardPath(uid, boardId))
+          && (isOwner(boardId) || request.auth.uid == uid);
+      }
+
+      match /items/{itemId} {
+        allow get, list: if isMember(boardId);
+        allow create: if isMember(boardId)
+          && request.resource.data.keys().hasOnly(['kind', 'itemId', 'addedBy', 'addedAt'])
+          && request.resource.data.kind in ['screen', 'collection']
+          && request.resource.data.itemId is string
+          && request.resource.data.itemId.size() > 0
+          && request.resource.data.itemId.size() <= 180
+          && request.resource.data.addedAt == request.time
+          && request.resource.data.addedBy == request.auth.uid;
+        allow update: if false;
+        allow delete: if isMember(boardId);
+      }
+    }
+
+    match /users/{uid}/boards/{boardId} {
+      allow get, list: if verified() && request.auth.uid == uid;
+      allow create: if verified()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['boardId', 'title', 'role'])
+        && request.resource.data.boardId == boardId
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.role in ['owner', 'member']
+        && existsAfter(memberPath(boardId, uid))
+        && getAfter(memberPath(boardId, uid)).data.uid == uid
+        && getAfter(memberPath(boardId, uid)).data.role == request.resource.data.role
+        && getAfter(memberPath(boardId, uid)).data.email == request.auth.token.email.lower()
+        && (
+          request.resource.data.role == 'owner'
+            ? matchingOwnerBootstrap(boardId, uid)
+              && request.resource.data.title == getAfter(boardPath(boardId)).data.title
+            : boardActiveAfter(boardId)
+              && acceptedInviteAfter(boardId, uid, getAfter(memberPath(boardId, uid)).data.inviteId)
+              && request.resource.data.title == getAfter(invitePath(getAfter(memberPath(boardId, uid)).data.inviteId)).data.boardTitle
+        );
+      allow update: if verified()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
+        && request.resource.data.keys().hasOnly(['boardId', 'title', 'role'])
+        && request.resource.data.boardId == boardId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.title == getAfter(boardPath(boardId)).data.title
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && boardActiveAfter(boardId)
+        && existsAfter(memberPath(boardId, uid))
+        && getAfter(memberPath(boardId, uid)).data.uid == uid
+        && getAfter(memberPath(boardId, uid)).data.role == resource.data.role
+        && getAfter(memberPath(boardId, uid)).data.email == request.auth.token.email.lower();
+      allow delete: if isMember(boardId)
+        && !existsAfter(memberPath(boardId, uid))
+        && ((request.auth.uid == uid) || isOwner(boardId));
+    }
+
+    function boardActiveAfter(boardId) {
+      return existsAfter(boardPath(boardId))
+        && existsAfter(identityPath(boardId))
+        && getAfter(boardPath(boardId)).data.state == 'active'
+        && getAfter(identityPath(boardId)).data.state == 'active'
+        && getAfter(boardPath(boardId)).data.ownerUid == getAfter(identityPath(boardId)).data.ownerUid;
+    }
+
+    match /boardIdentities/{boardId} {
+      allow read, update, delete: if false;
+      allow create: if verified()
+        && personalIdAllowed(boardId)
+        && request.resource.data.keys().hasOnly(['ownerUid', 'state', 'createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.state == 'active'
+        && request.resource.data.createdAt == request.time
+        && matchingOwnerBootstrap(boardId, request.auth.uid);
+    }
+
+    match /boardInvites/{inviteId} {
+      // Invite documents contain private collaboration metadata, not board contents.
+      // Scope reads to the creator or the exact pending invite recipient so list queries
+      // do not need to inspect an unconstrained boardId or expose board data.
+      allow get, list: if verified()
+        && (resource.data.ownerUid == request.auth.uid
+          || (resource.data.status == 'pending'
+            && resource.data.inviteeEmail == request.auth.token.email.lower()));
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly([
+          'boardId', 'boardTitle', 'ownerUid', 'inviteeEmail', 'status', 'createdAt', 'acceptedByUid'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.boardId is string
+        && isOwner(request.resource.data.boardId)
+        && request.resource.data.boardTitle is string
+        && request.resource.data.boardTitle.size() > 0
+        && request.resource.data.boardTitle.size() <= 80
+        && request.resource.data.inviteeEmail is string
+        && request.resource.data.inviteeEmail == request.resource.data.inviteeEmail.lower()
+        && request.resource.data.inviteeEmail != request.auth.token.email.lower()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'pending'
+        && request.resource.data.acceptedByUid == null;
+      allow update: if verified()
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'acceptedByUid'])
+        && (
+          (resource.data.ownerUid == request.auth.uid
+            && isOwner(resource.data.boardId)
+            && request.resource.data.status == 'revoked'
+            && request.resource.data.acceptedByUid == null)
+          || (resource.data.inviteeEmail == request.auth.token.email.lower()
+            && boardActive(resource.data.boardId)
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedByUid == request.auth.uid
+            && boardActiveAfter(resource.data.boardId)
+            && existsAfter(memberPath(resource.data.boardId, request.auth.uid))
+            && getAfter(memberPath(resource.data.boardId, request.auth.uid)).data.inviteId == inviteId
+            && getAfter(memberPath(resource.data.boardId, request.auth.uid)).data.role == 'member'
+            && existsAfter(userBoardPath(request.auth.uid, resource.data.boardId))
+            && getAfter(userBoardPath(request.auth.uid, resource.data.boardId)).data.role == 'member')
+        );
+      allow delete: if false;
+    }
+  }
+}

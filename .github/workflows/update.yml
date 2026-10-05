@@ -49,6 +49,9 @@ jobs:
       - name: Check pipeline and site syntax
         run: |
           node --check site/app.js
+          node --check site/cloud-boards.mjs
+          node --check tests/accounts.test.cjs
+
 
       - name: Check Cloudflare credentials
         run: test -n "$CLOUDFLARE_API_TOKEN"
@@ -57,16 +60,17 @@ jobs:
         run: npm install --no-save --no-package-lock wrangler@4
 
       - name: Run fetch pipeline
-        if: github.event_name == 'schedule' || inputs.refresh
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh)
         run: python3 pipeline/fetch.py
 
       - name: Reconcile current snapshot curation
-        if: github.event_name == 'workflow_dispatch' && !inputs.refresh
         run: python3 pipeline/fetch.py --reconcile-only
 
       - name: Check pipeline tests
         run: python3 -m unittest discover -s pipeline -p 'test_*.py'
 
+      - name: Check site tests
+        run: node --test tests/*.test.cjs
       - name: Commit refreshed catalog
         if: github.event_name == 'schedule' || inputs.refresh
         run: |

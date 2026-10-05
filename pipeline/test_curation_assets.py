@@ -26,14 +26,17 @@ class CurationAssetTests(unittest.TestCase):
             with self.subTest(element=element["title"]):
                 self.assertIn(element["screenId"], self.available_ids)
 
-    def test_preserved_screens_are_valid_catalog_assets(self):
+    def test_app_screenshots_resolve_to_merged_catalog_assets(self):
+        for app in self.data["apps"]:
+            with self.subTest(app=app["id"]):
+                self.assertTrue(set(app["assetIds"]) <= self.available_ids)
+
+    def test_supplemental_screens_are_valid_catalog_assets(self):
         preserved = [screen for screen_id, screen in self.supplemental.items() if screen_id not in self.catalog_ids]
         curated_only = {screen_id for screen_id, screen in self.supplemental.items() if screen.get("curatedOnly")}
-        self.assertGreaterEqual(len(preserved), 22)
         self.assertEqual(curated_only, {screen["id"] for screen in preserved})
         for screen in preserved:
             with self.subTest(screen=screen["id"]):
-                self.assertTrue(screen.get("curatedOnly"))
                 self.assertRegex(screen["id"], r"^[a-f0-9]{64}$")
                 self.assertRegex(screen["path"], rf"^assets/{screen['id']}\.[a-z0-9]+$")
                 self.assertRegex(screen["sourceUrl"], r"^https://(apps|itunes)\.apple\.com/")

@@ -10,9 +10,31 @@ const catalogCategories = () => [...new Set([
 ].filter(Boolean))].sort();
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
 let viewerState = null, curationState = 'loading', resolutionMap = {}, catalogScreenCount = 0;
-let data, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '';
+let data, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '', remoteBoard = false;
 try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
 try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
+function readDeviceBoard() {
+  const read = key => { try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
+  return {screens:read('oac-board'),collections:read('oac-board-collections')};
+}
+window.HuggingCatalog = {
+  getDeviceBoard: readDeviceBoard,
+  applyRemoteBoard(value) {
+    remoteBoard = true;
+    board = Array.isArray(value?.screens) ? value.screens : [];
+    savedCollections = Array.isArray(value?.collections) ? value.collections : [];
+    storageWarning = '';
+    if (data && route() === 'boards') render(); else syncActions();
+  },
+  useDeviceBoard() {
+    remoteBoard = false;
+    const value = readDeviceBoard(); board = value.screens; savedCollections = value.collections;
+    if (data && route() === 'boards') render(); else syncActions();
+  }
+};
+function reportBoardChange(kind, id, saved) {
+  if (remoteBoard) window.dispatchEvent(new CustomEvent('hugging:board-change', {detail:{kind,id,saved}}));
+}
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
 const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
 function media(s, fullSize = false) {
@@ -112,7 +134,7 @@ function mergeCuration(curation) {
   data.elements = [...(data.elements || []), ...elements];
 }
 function docs() {
-  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. An app appearing in multiple categories is kept in the first category encountered.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Your board stays in this browser</h3><p>Saved screenshots and curated flow collections are stored on this device. Export a board to keep a copy or supply it to your agent. There is no account sync. Your agent host's policies apply to anything you share with it.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
+  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. An app appearing in multiple categories is kept in the first category encountered.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Private boards</h3><p>Saved references stay in this browser until you sign in and choose to use a cloud board. A cloud board is private to its owner and invited members. Importing browser saves requires a separate confirmation, and Hugging App does not send invitation email.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
 }
 function pluginDocs() {
   return `<div class="doc"><h2>Review your references.</h2><p>Give your agent screenshots, interface text, source code, or an exported board. Ask for up to three prioritized improvements, each tied to evidence and a way to test it.</p><ol><li>Save useful screenshots to your board.</li><li>Export your references and attach the relevant images or code to your agent.</li><li>Ask: “Use Hugging App to review these references. Cite the evidence and mark unseen states as unverified.”</li></ol><p>The plugin reviews material you supply. It does not automatically browse this catalog or fetch third-party libraries. Your host processes supplied content under its own policies.</p><p><a class="text-link" href="https://github.com/PatchworkMD/app-design-research" target="_blank" rel="noopener noreferrer">Plugin source & installation ↗</a> · <a href="https://chatgpt.com/plugins/plugins_6a9e2172a0608191ad0b9dc952483df3" target="_blank" rel="noopener noreferrer">Open in ChatGPT ↗</a></p><p class="meta">Hugging App · Build &amp; Ship iOS Apps.</p></div>`;
@@ -143,7 +165,7 @@ function render() {
   }
   $('#export').disabled = false;
   const items = currentItems(), collections = r === 'boards' ? currentBoardCollections() : [];
-  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? ' · saved on this device' : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
+  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? (remoteBoard ? ' · synced board' : ' · saved on this device') : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
   $('#more').hidden = items.length <= limit;
   $('#content').className = ['elements','flows'].includes(r) || collections.length ? 'grid curated-grid' : 'grid';
   const empty = r === 'boards' ? '<h3>Your board is empty.</h3><p>Save screenshots or a curated flow, then export your research board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h3>No ${esc(routes[r].toLowerCase())} in this dataset</h3><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h3>No matching results</h3><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
@@ -228,13 +250,15 @@ document.addEventListener('click', e => {
   else if (b.dataset.saveCollection) {
     const id = b.dataset.saveCollection;
     savedCollections = savedCollections.includes(id) ? savedCollections.filter(x => x !== id) : [...savedCollections,id];
-    try { localStorage.setItem('oac-board-collections',JSON.stringify(savedCollections)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    if (!remoteBoard) try { localStorage.setItem('oac-board-collections',JSON.stringify(savedCollections)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    reportBoardChange('collection',id,savedCollections.includes(id));
     if (route() === 'boards') render();
     syncActions();
     if (storageWarning) $('#status').textContent = storageWarning;
   } else if (b.dataset.save) {
     const id = b.dataset.save; board = board.includes(id) ? board.filter(x => x !== id) : [...board,id];
-    try { localStorage.setItem('oac-board',JSON.stringify(board)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    if (!remoteBoard) try { localStorage.setItem('oac-board',JSON.stringify(board)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
+    reportBoardChange('screen',id,board.includes(id));
     if (route() === 'boards') render();
     syncActions();
     if (storageWarning) $('#status').textContent = storageWarning;

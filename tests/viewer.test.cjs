@@ -17,6 +17,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
     const cards = page.locator('.app-gallery .app-detail-card');
     await cards.first().waitFor();
     assert((await cards.count()) >= 2);
+    await dialog.evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
     const galleryWidth = await page.locator('.app-gallery').evaluate(el => el.getBoundingClientRect().width);
     const dialogWidth = await dialog.evaluate(el => el.getBoundingClientRect().width);
     assert(galleryWidth >= dialogWidth - 50, 'the gallery should fill the dialog content width');

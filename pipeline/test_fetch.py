@@ -1,3 +1,6 @@
+import hashlib
+import io
+import subprocess
 import importlib.util
 import tempfile
 import unittest
@@ -13,41 +16,59 @@ SPEC.loader.exec_module(fetch)
 
 
 class BuildTest(unittest.TestCase):
-    def test_curated_screens_remain_supplemental_across_refresh(self):
+    def test_refresh_uploads_curated_images_and_keeps_app_assets_resolvable(self):
+        image_bodies = {
+            "https://is1-ssl.mzstatic.com/image/thumb/reviewed/320x480bb.png": b"fresh reviewed image",
+            "https://is1-ssl.mzstatic.com/image/thumb/new/320x480bb.png": b"fresh chart image",
+        }
+        asset_ids = [hashlib.sha256(body).hexdigest() for body in image_bodies.values()]
+        retained_id = hashlib.sha256(b"retained reviewed image").hexdigest()
+        source_url = "https://apps.apple.com/us/app/catalog-fixture/id12345"
+        chart = json.dumps({"feed": {"entry": [{"id": {"attributes": {"im:id": "12345"}}}]}}).encode()
+        responses = {
+            f"https://itunes.apple.com/{fetch.STORE}/rss/topfreeapplications/"
+            f"limit={fetch.CHART_LIMIT}/genre={genre_id}/json": chart
+            for genre_id in fetch.GENRES
+        }
+        responses[f"https://itunes.apple.com/lookup?id=12345&country={fetch.STORE}"] = json.dumps({
+            "results": [{"trackId": 12345, "trackName": "Catalog fixture",
+                         "trackViewUrl": source_url, "screenshotUrls": list(image_bodies)}],
+        }).encode()
+        responses.update(image_bodies)
+        objects = {}
+
+        def put_object(command, **kwargs):
+            path = Path(command[command.index("--file") + 1])
+            key = command[5].split("/", 1)[1]
+            objects[key] = path.read_bytes()
+            return subprocess.CompletedProcess(command, 0)
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            assets = root / "assets"
-            assets.mkdir()
-            (assets / "in-snapshot.png").write_bytes(b"image")
-            (assets / "fresh.png").write_bytes(b"image")
             (root / "data.json").write_text(json.dumps({"apps": [], "screens": []}))
             (root / "curation.json").write_text(json.dumps({"screens": [
-                {"id": "in-snapshot", "path": "assets/in-snapshot.png", "curatedOnly": True},
-                {"id": "curated-only", "path": "assets/curated-only.png"},
+                {"id": asset_ids[0], "path": f"assets/{asset_ids[0]}.png",
+                 "sourceUrl": source_url, "curatedOnly": True},
+                {"id": retained_id, "path": f"assets/{retained_id}.png", "sourceUrl": source_url},
             ]}))
-            snapshot = {
-                "apps": [{"id": "a", "assetIds": ["in-snapshot"]}],
-                "screens": [
-                    {"id": "in-snapshot", "path": "assets/in-snapshot.png"},
-                    {"id": "fresh", "path": "assets/fresh.png"},
-                ],
-                "coverage": {"screens": 2},
-            }
-            with patch.object(fetch, "SITE_DIR", root), patch.object(fetch, "build", return_value=snapshot), \
-                 patch.object(fetch, "ASSETS_DIR", assets), \
+            with patch.object(fetch, "SITE_DIR", root), patch.object(fetch, "ASSETS_DIR", root / "assets"), \
+                 patch.object(fetch.urllib.request, "urlopen",
+                              side_effect=lambda request, timeout: io.BytesIO(responses[request.full_url])), \
+                 patch.object(fetch.time, "sleep"), \
                  patch.dict(fetch.os.environ, {"CATALOG_R2_UPLOAD": "1"}), \
-                 patch.object(fetch.subprocess, "run") as run:
-                run.return_value.returncode = 0
+                 patch.object(fetch.subprocess, "run", side_effect=put_object):
                 fetch.main()
+
             data = json.loads((root / "data.json").read_text())
-            screens = json.loads((root / "curation.json").read_text())["screens"]
-            self.assertEqual({screen["id"] for screen in data["screens"]}, {"fresh"})
-            self.assertEqual(data["coverage"]["screens"], 1)
-            self.assertEqual(data["apps"][0]["assetIds"], ["in-snapshot"])
-            self.assertTrue(screens[0]["curatedOnly"])
-            self.assertTrue(screens[1]["curatedOnly"])
-            commands = [call.args[0] for call in run.call_args_list]
-            self.assertTrue(any("open-app-catalog-assets/assets/in-snapshot.png" in command for command in commands))
+            curated = {screen["id"]: screen for screen in json.loads((root / "curation.json").read_text())["screens"]}
+            merged = dict(curated)
+            merged.update({screen["id"]: screen for screen in data["screens"]})
+            self.assertEqual(data["apps"][0]["assetIds"], asset_ids)
+            for asset_id, body in zip(asset_ids, image_bodies.values()):
+                with self.subTest(asset=asset_id):
+                    self.assertEqual(objects[merged[asset_id]["path"]], body)
+            self.assertTrue(curated[asset_ids[0]]["curatedOnly"])
+            self.assertTrue(curated[retained_id]["curatedOnly"])
 
     def test_screenshot_keeps_stable_id_and_adds_full_resolution_source(self):
         saved = {"id": "stable", "path": "assets/stable.jpg"}
