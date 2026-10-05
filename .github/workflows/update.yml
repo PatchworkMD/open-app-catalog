@@ -69,8 +69,12 @@ jobs:
       - name: Check pipeline tests
         run: python3 -m unittest discover -s pipeline -p 'test_*.py'
 
+      - name: Install browser test runner
+        run: npm install --no-save --no-package-lock playwright@1.63.0
+
       - name: Check site tests
         run: node --test tests/*.test.cjs
+
       - name: Commit refreshed catalog
         if: github.event_name == 'schedule' || inputs.refresh
         run: |

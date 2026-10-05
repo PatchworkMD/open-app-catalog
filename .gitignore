@@ -15,3 +15,4 @@ site/llms.txt
 
 # Firebase emulator logs
 *-debug.log
+node_modules/
