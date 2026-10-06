@@ -1,18 +1,18 @@
 # Hugging App
 
-An open-source, auto-updated App Store chart catalog. Rebuilt on a schedule
-directly from Apple's free public APIs — no third-party dataset is scraped,
-copied, or redistributed.
+An open-source App Store chart catalog that rebuilds itself on a schedule
+from Apple's free public APIs. It doesn't scrape, copy, or redistribute any
+third-party dataset.
 
 **Live site:** [catalog.patchworkmd.dev](https://catalog.patchworkmd.dev/).
 Cloudflare Worker `open-app-catalog` serves the site; R2 serves cached previews and icons. Sharp screenshot variants are loaded from Apple’s image CDN.
 
 ## Why this exists
 
-Commercial "app intelligence" libraries curate App Store data and gate most
-of it behind a paywall. This project rebuilds the same *category* of insight
-— top-chart apps, categories, ratings, and screenshots
-— straight from primary sources, on a schedule, fully open.
+Commercial "app intelligence" libraries curate App Store data and put most
+of it behind a paywall. This project rebuilds the basics (top-chart apps,
+categories, ratings, and screenshots) from Apple's own feeds and publishes
+all of it.
 
 ## Sources (all free, public, no auth)
 
@@ -22,7 +22,7 @@ of it behind a paywall. This project rebuilds the same *category* of insight
 | App metadata, ratings, screenshots | [iTunes Lookup API](https://performance-partners.apple.com/search-api) |
 | Screenshots | Each developer's own public App Store listing images, served by Apple |
 
-Revenue is **never** scraped from anywhere — it doesn't exist as public data.
+Revenue isn't scraped from anywhere, because no public source has it.
 `pipeline/fetch.py` computes a transparent, documented estimate from chart
 rank and category (a simple rank-decay heuristic, see `estimate_revenue()`),
 and each legacy value is labeled `(estimated)` in exported data. The interface
@@ -154,7 +154,7 @@ The interactive hash routes remain available; crawlable pages use stable paths.
 
 The existing GitHub Actions **Update catalog** workflow runs daily (scheduled for 06:17 UTC; GitHub may start it later). It pulls up to 100 free-chart entries for each of the eight categories in `pipeline/fetch.py` → `GENRES`. An app newly entering a tracked chart is added on the next successful refresh. Apps leaving those charts leave the current chart catalog. This is a US free-app chart catalog, not a revenue ranking.
 
-The importer retains up to ten available iPhone listing screenshots per app, records actual per-category feed counts and added/removed app IDs in `coverage`, uploads only media hashes absent from the previous published snapshot to R2, and only then replaces the snapshot. Empty chart or metadata responses abort the refresh. Reviewed element/collection images are pinned in `site/curation.json`, so changing App Store images does not silently erase that research.
+The importer retains up to ten available iPhone listing screenshots per app, records actual per-category feed counts and added/removed app IDs in `coverage`, uploads only media hashes absent from the previous published snapshot to R2, and only then replaces the snapshot. Empty chart or metadata responses abort the refresh. Reviewed element/collection images are pinned in `site/curation.json`, so a developer swapping their App Store images doesn't erase that research.
 
 Fresh media uploads finish before pinned reviewed screenshots are omitted from raw `data.json`. Those screenshots remain in `curation.json` and are merged into the browser's asset index, so app `assetIds` can resolve through either file. `coverage.screens` counts the raw snapshot, not the merged reviewed library.
 
