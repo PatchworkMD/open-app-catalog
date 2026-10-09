@@ -1,6 +1,6 @@
 {
   "name": "open-app-catalog",
-  "account_id": "bc63168e55fcaa26c774d21c050704fa",
+  // Account ID is CLOUDFLARE_ACCOUNT_ID (GitHub Actions: secrets.CLOUDFLARE_ACCOUNT_ID).
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "assets": {

@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 120
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: bc63168e55fcaa26c774d21c050704fa
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CATALOG_R2_UPLOAD: "1"
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +54,9 @@ jobs:
 
 
       - name: Check Cloudflare credentials
-        run: test -n "$CLOUDFLARE_API_TOKEN"
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
 
       - name: Install Wrangler
         run: npm install --no-save --no-package-lock wrangler@4
