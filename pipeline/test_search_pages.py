@@ -20,6 +20,8 @@ class SearchPagesTest(unittest.TestCase):
             page = (root / 'apps/123/index.html').read_text()
             self.assertIn('https://apps.apple.com/us/app/example/id123', page)
             self.assertIn('rel="canonical" href="https://catalog.patchworkmd.dev/apps/123/"', page)
+            self.assertRegex(page, r'<link rel="stylesheet" href="/style\.css(\?v=[^"]+)?">')
+            self.assertRegex(page, r'<link rel="stylesheet" href="/references\.css(\?v=[^"]+)?">')
             self.assertNotIn('<script>alert(1)</script>', page)
             self.assertIn('&lt;script&gt;', page)
             self.assertIn('Productivity · Lifestyle', page)
