@@ -43,10 +43,11 @@ genre IDs in `pipeline/fetch.py` to widen coverage.
 `.github/workflows/update.yml` runs the pipeline on a schedule, commits the
 refreshed `site/data.json`, and redeploys the Worker. Media uploads to R2 before
 the dataset is replaced. A failed upload stops the job and preserves the prior
-dataset. The workflow requires the repository secret `CLOUDFLARE_API_TOKEN`;
-configure it through GitHub Actions secret settings, never in source.
-The token must authorize this account’s Worker deployments, R2 object writes,
-and the existing zone route. Missing credentials fail the preflight.
+dataset. The workflow requires the repository secrets `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID`. Configure both through GitHub Actions secret settings,
+never in source. The token must authorize this account’s Worker deployments,
+R2 object writes, and the existing zone route. `CLOUDFLARE_ACCOUNT_ID` selects
+that same account. Missing credentials fail the preflight.
 
 The schedule is configured; that alone does not prove a successful update.
 Check the Actions run and the public snapshot date. The companion plugin is Hugging App; its release status is tracked in its own repository.
@@ -128,8 +129,8 @@ every run. To push a run's new media to R2:
 CLOUDFLARE_ACCOUNT_ID=<account owning the bucket> CATALOG_R2_UPLOAD=1 python3 pipeline/fetch.py
 ```
 
-Wrangler's `r2` subcommands default to a different account than `wrangler.jsonc`
-targets, so `CLOUDFLARE_ACCOUNT_ID` must be set explicitly for them.
+`wrangler.jsonc` does not store an account ID. Set `CLOUDFLARE_ACCOUNT_ID`
+for Worker deploys and for Wrangler `r2` uploads.
 
 ## Curated interface references
 
@@ -162,7 +163,7 @@ An app present in more than one category chart appears once in the catalog and r
 
 To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
 
-Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. The site source now supports optional Google/email accounts and private synced/shared boards in its separate `patchworkmd-hugging-app-prod` Firebase project. These features remain unavailable on production until Firebase setup, providers, database rules, and public Web App config are activated. Website accounts and boards are separate from the Hugging App plugin and its host-managed identity.
+Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. The site source now supports optional Google/email accounts and private synced/shared boards in its separate `[redacted-gcp-project]` Firebase project. These features remain unavailable on production until Firebase setup, providers, database rules, and public Web App config are activated. Website accounts and boards are separate from the Hugging App plugin and its host-managed identity.
 
 ### Screenshot resolution
 

@@ -3,7 +3,7 @@
 ## Runtime boundary
 
 The browser targets Firebase Authentication and Cloud Firestore for the existing
-GCP project `patchworkmd-hugging-app-prod`; Firebase activation remains unconfirmed
+GCP project `[redacted-gcp-project]`; Firebase activation remains unconfirmed
 as detailed below. Once approved, a public, non-secret Firebase Web App configuration
 is served as `/firebase-config.json`. Production rejects other projects. Missing configuration disables account
 actions with an explicit setup message; it never falls back to a fake account
@@ -75,8 +75,8 @@ separate approval.
 
 ### Exact activation handoff
 
-The existing GCP project `patchworkmd-hugging-app-prod` is `ACTIVE` (project
-number `668246727797`), and the Firebase Management API is enabled. A read-only
+The existing GCP project `[redacted-gcp-project]` is `ACTIVE` (project
+number `[redacted-gcp-project]`), and the Firebase Management API is enabled. A read-only
 Firebase Management resource lookup using the quota project returned
 `404 NOT_FOUND`; Firebase resource setup and terms are therefore not confirmed.
 Do not treat the existing GCP project or local source as an activated Firebase

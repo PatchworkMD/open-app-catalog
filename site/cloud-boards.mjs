@@ -1,4 +1,4 @@
-const PROJECT_ID = 'patchworkmd-hugging-app-prod';
+const PROJECT_ID = '[redacted-gcp-project]';
 const SDK = 'https://www.gstatic.com/firebasejs/12.19.0';
 
 export const normalizeEmail = value => String(value || '').trim().toLowerCase();
