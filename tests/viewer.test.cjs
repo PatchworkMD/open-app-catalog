@@ -7,6 +7,7 @@ const {catalogBase} = require('./browser-fixture.cjs');
   try {
     const page = await browser.newPage({viewport:{width:1440,height:1000}});
     const base = await catalogBase(page);
+    await page.route(url => url.hostname.endsWith('-ssl.mzstatic.com'), route => route.fulfill({contentType:'image/svg+xml', body:'<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796"><rect width="1290" height="2796" fill="#101010"/></svg>'}));
     await page.goto(base + '#apps', {waitUntil:'domcontentloaded'});
     await page.locator('.app-open').first().waitFor();
     const dialog = page.locator('#viewer');

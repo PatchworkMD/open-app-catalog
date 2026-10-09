@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {catalogBase} = require('./browser-fixture.cjs');
 (async () => {
-  const browser = await chromium.launch({headless:true,channel:'chrome'});
+  const browser = await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
   const page = await browser.newPage({viewport:{width:1200,height:1000},deviceScaleFactor:2});
   const base = await catalogBase(page);
   try {

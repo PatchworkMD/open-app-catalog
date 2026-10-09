@@ -134,7 +134,7 @@ input,select{font-size:15px;background:var(--surface-2)}
 .rank{font-variant-numeric:tabular-nums;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 30%,var(--surface-2)),color-mix(in srgb,var(--accent-2) 30%,var(--surface-2)));color:var(--text);margin-right:6px}
 
 .empty{border:1px dashed var(--line-strong);background:var(--surface);border-radius:var(--radius);padding:56px 24px;max-width:650px;margin:0 auto;text-align:center;color:var(--muted);line-height:1.7;break-inside:avoid;column-span:all}
-.empty h3{color:var(--text);font-size:17px;margin:0 0 10px}
+.empty :is(h2,h3){color:var(--text);font-family:inherit;font-weight:700;letter-spacing:normal;font-size:17px;margin:0 0 10px}
 .empty a{display:inline-block;margin-top:14px;padding:9px 16px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:9px;color:var(--text);text-decoration:none;font-weight:550}
 .empty a:hover{background:var(--surface-hover)}
 
