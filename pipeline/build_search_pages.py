@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 BASE = 'https://catalog.patchworkmd.dev'
-ASSET_VERSION = '20261001-catalog-refresh'
+ASSET_VERSION = '20261009-polish'
 ROOT = Path(__file__).resolve().parents[1] / 'site'
 
 def esc(value):

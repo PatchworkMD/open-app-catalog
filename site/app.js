@@ -142,7 +142,7 @@ function pluginDocs() {
 function fillHero() {
   const nodes = document.querySelectorAll('.float-card');
   const shots = [...data.apps].sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999)).map(a => data.screens.find(s => (a.assetIds || []).includes(s.id))).filter(Boolean);
-  nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]).replace('loading="eager"', 'loading="eager"'); });
+  nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]); });
   const copy = $('#hero p');
   if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${catalogScreenCount.toLocaleString()} listing screenshots to explore.`;
 }
@@ -160,7 +160,7 @@ function render() {
   if (['flows','elements'].includes(r) && curationState !== 'ready') {
     $('#content').className = 'grid'; $('#more').hidden = true; $('#export').disabled = true;
     $('#status').textContent = curationState === 'loading' ? 'Loading reviewed references…' : 'Reviewed references unavailable';
-    $('#content').innerHTML = curationState === 'loading' ? '<p role="status">Loading reviewed references…</p>' : '<div class="empty"><h3>These references could not load.</h3><p>The app catalog is still available. Try loading the reviewed library again.</p><button data-retry-curation>Try again</button></div>';
+    $('#content').innerHTML = curationState === 'loading' ? '<p role="status">Loading reviewed references…</p>' : '<div class="empty"><h2>These references could not load.</h2><p>The app catalog is still available. Try loading the reviewed library again.</p><button data-retry-curation>Try again</button></div>';
     return;
   }
   $('#export').disabled = false;
@@ -168,7 +168,7 @@ function render() {
   $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? (remoteBoard ? ' · synced board' : ' · saved on this device') : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
   $('#more').hidden = items.length <= limit;
   $('#content').className = ['elements','flows'].includes(r) || collections.length ? 'grid curated-grid' : 'grid';
-  const empty = r === 'boards' ? '<h3>Your board is empty.</h3><p>Save screenshots or a curated flow, then export your research board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h3>No ${esc(routes[r].toLowerCase())} in this dataset</h3><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h3>No matching results</h3><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
+  const empty = r === 'boards' ? '<h2>Your board is empty.</h2><p>Save screenshots or a curated flow, then export your research board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h2>No ${esc(routes[r].toLowerCase())} in this dataset</h2><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h2>No matching results</h2><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
   const collectionCards = collections.map(({kind,record}) => curationCard(record,kind));
   const screenCards = items.slice(0,limit).map(x => r === 'apps' ? appCard(x) : ['flows','elements'].includes(r) ? curationCard(x, r) : screenCard(x));
   const cards = [...collectionCards,...screenCards];
@@ -202,7 +202,9 @@ function openApp(app, focusScreenId = null) {
   viewerState = null;
   $('#viewer').classList.remove('screen-viewer');
   $('#viewerTitle').textContent = app.name;
-  const links = [sourceLink(app.url), `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>`].filter(Boolean).join(' · ');
+  // build_search_pages.py only publishes /apps/<id>/ for apps with an App Store URL and screenshots.
+  const source = sourceLink(app.url);
+  const links = [source, source && related.length ? `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>` : ''].filter(Boolean).join(' · ');
   const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
   const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(categoriesForApp(app).join(' · ') || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
   const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
@@ -318,7 +320,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   loadCuration();
 }).catch(() => {
   $('#hero').hidden = true; $('#coverage').textContent = 'The catalog could not load.';
-  $('#content').innerHTML = '<div class="empty"><h3>We could not load the library.</h3><p>Your saved board remains on this device.</p><button onclick="location.reload()">Try again</button></div>';
+  $('#content').innerHTML = '<div class="empty"><h2>We could not load the library.</h2><p>Your saved board remains on this device.</p><button onclick="location.reload()">Try again</button></div>';
 });
 
 async function loadCuration() {
