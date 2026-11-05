@@ -60,6 +60,11 @@ the snapshot metadata. The companion [Hugging App plugin](https://github.com/Pat
 reviews supplied evidence; it does not fetch this catalog automatically.
 Existing saved-board keys and plugin identifiers are preserved.
 
+The release is local-first: no account is required, and saved boards remain in
+this browser on this device. Export a board to keep a portable reference copy;
+clearing browser storage removes local saves. Cloud accounts and shared boards
+are deferred to a separate release.
+
 Category ranks are shown only for datasets produced with the corrected
 original-feed rank marker. Older snapshots retain their data without displaying
 potentially compressed ranks.
@@ -102,6 +107,7 @@ node tests/curation.test.cjs
 node tests/media.test.cjs
 node tests/resolution.test.cjs
 node tests/viewer.test.cjs
+node tests/local-first.test.cjs
 ```
 
 Pull requests and `push/**` branches run `.github/workflows/validate.yml` with
@@ -168,7 +174,7 @@ An app present in more than one category chart appears once in the catalog and r
 
 To update now, run **Actions → Update catalog → Run workflow**, leaving **Refresh Apple catalog before deployment** enabled. To track another category, add its Apple genre ID and label to the existing `GENRES` mapping, then run that same workflow. No second scheduler or separate upload tool is required. Review the run result and public snapshot timestamp; a configured schedule alone does not prove a successful update.
 
-Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. The site source now supports optional Google/email accounts and private synced/shared boards in its separate `[redacted-gcp-project]` Firebase project. These features remain unavailable on production until Firebase setup, providers, database rules, and public Web App config are activated. Website accounts and boards are separate from the Hugging App plugin and its host-managed identity.
+Apple listing screenshots are not recordings of app interaction. Adding a real flow requires independently captured, reviewed screens and an evidenced sequence; refreshing chart data cannot manufacture that coverage. Cloud account and synced/shared-board source is retained for a later release, but the public page does not load it. The emulator UI harness explicitly loads that module for cloud development. Enabling accounts will require a separate reviewed release, Firebase setup, providers, database rules, and public Web App configuration; adding configuration alone does not enable accounts on the local-first page. Website accounts and boards remain separate from the Hugging App plugin and its host-managed identity.
 
 ### Screenshot resolution
 

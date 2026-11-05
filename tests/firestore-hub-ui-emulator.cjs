@@ -75,6 +75,7 @@ async function routes(page) {
         const file=path.resolve(root,`.${rel}`);
         if(file===root||!file.startsWith(`${root}${path.sep}`))return route.fulfill({status:403,body:'blocked path'});
         let body=await fs.readFile(file);
+        if(rel==='/index.html') body=body.toString().replace('</head>','<script type="module" src="/cloud-boards.mjs"></script></head>');
         if(url.pathname==='/cloud-boards.mjs') {
           // Hold the real SDK result at the personal-index boundary; getDoc uses Listen,
           // not the transaction-only batchGet transport. Observe the actual auth completion.
