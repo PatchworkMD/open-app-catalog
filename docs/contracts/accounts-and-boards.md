@@ -1,5 +1,9 @@
 # Hugging App accounts and boards contract
 
+## Release scope
+
+Austin approved the public catalog and local boards for the local-first release on 2026-11-05. The release page does not load `cloud-boards.mjs`. The emulator UI harness loads it explicitly to preserve cloud development checks. The following contract applies to the separate, deferred cloud-account release.
+
 ## Runtime boundary
 
 The browser targets Firebase Authentication and Cloud Firestore for the existing

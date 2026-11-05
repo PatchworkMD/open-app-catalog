@@ -6,7 +6,7 @@ Goal: ship a dependable, free, public App Store design research catalog using Ap
 
 - Existing checks run inside the production refresh/deploy workflow; PRs need independent validation without credentials or deployment.
 - Browser checks cover 390px but not the required 320px viewport.
-- Cloud boards/accounts are intentionally unactivated; launch scope needs Austin's decision.
+- Austin approved local-first on 2026-11-05: public catalog plus local boards. Cloud accounts belong to a separate later release.
 - Capture local screenshots and verify runtime errors before calling the public catalog ready.
 
 ## Ordered steps
@@ -23,3 +23,12 @@ Goal: ship a dependable, free, public App Store design research catalog using Ap
 ## Gates
 
 Record product decisions in STATUS.md with recommended options first. Do not activate Firebase, change credentials, spend on metered APIs, or trigger production workflows.
+
+## Local-first release follow-up
+
+1. Stop loading the deferred cloud account module from the release page; retain its source and emulator harness.
+2. Make source/privacy copy reflect device-local boards.
+3. Verify persistence/export, no account traffic/UI, no console errors, and mobile layout; run the complete existing checks.
+4. Open a second small PR stacked on #11. No merge or deployment.
+
+Local-first verification: all 31 Python and 15 Node/browser tests passed; the expanded all-route console regression passed. Real representative media was reviewed in local-board screenshots at both widths. Read-only live Worker verification passed. Product gate resolved; only PR checks/review remain before handback.

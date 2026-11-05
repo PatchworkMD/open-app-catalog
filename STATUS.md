@@ -1,30 +1,26 @@
 # Hugging App status — 2026-11-05
 
-## Product goal
+## Approved product scope
 
-A free, open-source App Store design research catalog sourced from Apple's public feeds: browse apps and listing screenshots, inspect reviewed UI references, compare screens, and save/export a local board. Listing screenshots are evidence of published designs, not verified interaction flows or revenue intelligence.
+Austin approved local-first: the public App Store design research catalog plus local saved boards. Cloud accounts and synced/shared boards belong to a later, separate release. No product questions remain for this release.
 
-README and recent commits establish this scope. No CONTEXT.md existed at intake. Daily refresh commits through November 4 show snapshot activity, not proof of live deployment health.
+The catalog uses Apple's public feeds, with honest screenshot/source labels and no claims of verified interaction flows or revenue intelligence. Browser storage keys, exports, reference IDs, and existing public APIs are preserved.
 
-## Done in this branch
+## Done
 
-- Added isolated PR/feature-branch validation with read-only repository permissions, no deployment credentials, explicit browser installation, and screenshot artifacts.
-- Extended route and focused-viewer layout coverage to 390px and 320px.
-- Reproduced Flows horizontal overflow at 390px: a fixed preview height plus inherited aspect ratio forced 442px-wide previews. Removed that ratio in the curated grid; retained its height and image containment.
-- Python pipeline suite: 31 tests passed. Reference-page build: 803 pages generated. JavaScript syntax and whitespace checks passed.
-
-- Browser/Node suite: 14 tests passed with Playwright 1.63.0 and matching Chromium headless shell, run sequentially. The main route suite reported no uncaught JavaScript errors.
-- Reviewed local fixture screenshots at both widths, including Flows, saved board, and the focused viewer. Screenshot evidence: `/tmp/hugging-app-qa-Lfdy9f/` and `/tmp/hugging-app-viewer-320.png`. Fixtures verify layout, not production media appearance or CDN availability.
+- PR #11 fixes mobile Flows overflow, checks all main routes and the focused viewer at 390px/320px, and adds read-only PR validation with screenshots. Both GitHub validation runs passed; automated review reported no findings.
+- The local-first page no longer loads the deferred cloud-account module or requests Firebase configuration. Cloud source remains available; its emulator harness explicitly loads it for future development.
+- Public copy explains device-local storage, export, and the effect of clearing browser storage.
+- A regression test first reproduced the unwanted Account UI. It now verifies saved-board persistence/export, absence of account traffic/UI, and no console errors across all main routes.
+- Validation: 31 Python tests and 15 Node/browser tests passed; 803 reference pages built; JavaScript syntax and whitespace checks passed. The expanded all-route console test also passed separately.
+- Reviewed saved-board and viewer screenshots at 390px/320px. Local evidence: `/tmp/hugging-app-local-board-390.png`, `/tmp/hugging-app-local-board-320.png`, and `/tmp/hugging-app-viewer-320.png`. Fixture images verify layout and controls.
+- Captured and reviewed local board screenshots with a real representative live media image at both widths: `/tmp/hugging-app-real-board-390.png` and `/tmp/hugging-app-real-board-320.png`.
+- Read-only live Worker verification passed: current snapshot, representative media, canonical reference page, and repeat-fetch consistency.
 
 ## In progress
 
-- Awaiting launch-scope decision below and PR review. No merge, production workflow, or deployment performed.
-- Production console/media health and configured Firebase emulator integration are not certified by this local pass. Cloud account activation remains gated.
+- Second PR preparation and GitHub validation for the local-first change, stacked on #11.
 
-## Gates for Austin
+## Gates
 
-1. Ship the public catalog with local boards while cloud accounts remain unactivated?
-   - A. Yes — recommended. Keep the current free catalog/local-board scope; treat cloud sync as a separate release.
-   - B. No. Require cloud accounts before launch; authorization for Firebase/OAuth setup remains necessary and has not been granted.
-
-Merging site/workflow changes into master can trigger the existing production update/deploy workflow. Merge and deployment remain outside this task's authorization.
+No unresolved product gates. Cloud activation and its Firebase integration testing are excluded from this release. Nothing has been merged or deployed. Merging changes into master can trigger the existing production deployment workflow; merge and deployment remain outside this task's authorization.
