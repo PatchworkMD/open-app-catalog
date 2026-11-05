@@ -17,9 +17,10 @@ The catalog uses Apple's public feeds, with honest screenshot/source labels and 
 - Captured and reviewed local board screenshots with a real representative live media image at both widths: `/tmp/hugging-app-real-board-390.png` and `/tmp/hugging-app-real-board-320.png`.
 - Read-only live Worker verification passed: current snapshot, representative media, canonical reference page, and repeat-fetch consistency.
 
-## In progress
+## Delivery
 
-- Second PR preparation and GitHub validation for the local-first change, stacked on #11.
+- [PR #11](https://github.com/PatchworkMD/open-app-catalog/pull/11): mobile layout and isolated PR validation.
+- [PR #12](https://github.com/PatchworkMD/open-app-catalog/pull/12): local-first release, stacked on #11. The release candidate is locally validated; current CI and review results are tracked on the PR.
 
 ## Gates
 
