@@ -1,331 +1,660 @@
-import {createBoard} from './board.js';
-import {isAssetPath, isAppleSourceUrl, isFullSizeUrl, isReviewedScreenshot, normalizeSnapshot} from './snapshot.js';
-const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const categoriesForApp = app => Array.isArray(app.categories) && app.categories.length ? app.categories : [app.category].filter(Boolean);
-const catalogCategories = () => [...new Set([
-  ...data.apps.flatMap(categoriesForApp),
-  ...data.screens.map(x => x.category),
-  ...data.flows.map(x => x.category),
-  ...data.elements.map(x => x.category)
-].filter(Boolean))].sort();
-const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
-let viewerState = null, curationState = 'loading', resolutionMap = {}, catalogScreenCount = 0;
-let data, limit = 48, selected = new Set();
-const deviceStorage = {getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value)};
-const board = createBoard(deviceStorage);
-const refreshBoard = () => { if (data && route() === 'boards') render(); else syncActions(); };
-window.HuggingCatalog = {
-  getDeviceBoard: board.readDevice,
-  applyRemoteBoard(value) { board.useRemote(value); refreshBoard(); },
-  useDeviceBoard() { board.useDevice(); refreshBoard(); }
+// @ts-check
+import { createBoard } from './board.js';
+import policy from './publication-policy.json' with { type: 'json' };
+import { mergeReviewedLibrary, readSnapshot } from './snapshot.js';
+import {
+  aboutDoc,
+  appCard,
+  appDetail,
+  categoriesForApp,
+  chartRankIn,
+  emptyState,
+  esc,
+  media,
+  pluginDoc,
+  reviewedCard,
+  reviewedScreenshotIds,
+  screenCard,
+  screenViewer,
+  screenshotsFor,
+} from './views.js';
+
+/**
+ * @typedef {import('./snapshot.js').App} App
+ * @typedef {import('./snapshot.js').Screenshot} Screenshot
+ * @typedef {import('./snapshot.js').Collection} Collection
+ * @typedef {import('./snapshot.js').UiElement} UiElement
+ * @typedef {import('./snapshot.js').Snapshot} Snapshot
+ * @typedef {import('./views.js').ScreenViewer} ScreenViewer
+ * @typedef {import('./views.js').ReviewedKind} ReviewedKind
+ * @typedef {App | Screenshot | Collection | UiElement} CatalogRecord
+ * @typedef {{kind: ReviewedKind, record: Collection | UiElement}} BoardCollection
+ */
+
+/**
+ * @template {typeof Element} T
+ * @param {string} selector
+ * @param {T} type
+ * @returns {InstanceType<T>}
+ */
+function element(selector, type) {
+  const found = document.querySelector(selector);
+  if (!(found instanceof type)) throw new Error(`Missing ${selector}`);
+  return /** @type {InstanceType<T>} */ (found);
+}
+
+const ui = {
+  hero: element('#hero', HTMLElement),
+  heroCopy: element('#hero p:not(.hero-title)', HTMLParagraphElement),
+  heroCta: element('.hero-cta', HTMLButtonElement),
+  heading: element('.heading', HTMLElement),
+  skipLink: element('.skip-link', HTMLAnchorElement),
+  title: element('#title', HTMLHeadingElement),
+  coverage: element('#coverage', HTMLElement),
+  controls: element('#controls', HTMLElement),
+  search: element('#search', HTMLInputElement),
+  category: element('#category', HTMLSelectElement),
+  kind: element('#kind', HTMLSelectElement),
+  sort: element('#sort', HTMLSelectElement),
+  compare: element('#compare', HTMLButtonElement),
+  compareCount: element('#compareCount', HTMLElement),
+  exportButton: element('#export', HTMLButtonElement),
+  status: element('#status', HTMLElement),
+  content: element('#content', HTMLElement),
+  more: element('#more', HTMLButtonElement),
+  viewer: element('#viewer', HTMLDialogElement),
+  viewerTitle: element('#viewerTitle', HTMLElement),
+  viewerContent: element('#viewerContent', HTMLElement),
+  close: element('#close', HTMLButtonElement),
 };
-const actionText = (text, item) => `<span class="action-text">${text}</span><span class="sr-only"> ${esc(item)}</span>`;
-function saveButton(id, item) {
-  const on = board.has('screen', id);
-  return `<button data-save="${esc(id)}" aria-pressed="${on}">${actionText(on ? 'Saved' : 'Save', item)}</button>`;
+
+const ROUTES = /** @type {const} */ ({
+  apps: 'Apps',
+  screens: 'Screens',
+  flows: 'Flows',
+  elements: 'UI elements',
+  boards: 'Saved board',
+  agents: 'About & sources',
+  plugin: 'Hugging App plugin',
+});
+/** @typedef {keyof typeof ROUTES} Route */
+const PAGE_SIZE = 48;
+const MAX_COMPARISON = 4;
+
+/** @param {string} value @returns {value is Route} */
+const isRoute = value => Object.hasOwn(ROUTES, value);
+/** @returns {Route} */
+const route = () => {
+  const hash = location.hash.slice(1);
+  return isRoute(hash) ? hash : 'apps';
+};
+/** @param {Route} r @returns {r is 'flows' | 'elements'} */
+const isReviewedRoute = r => r === 'flows' || r === 'elements';
+const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** @type {Snapshot | null} */
+let listingSnapshot = null;
+/** @type {Snapshot | null} */
+let snapshot = null;
+/** @type {Map<string, Screenshot>} */
+let screenshotById = new Map();
+/** @type {'loading' | 'ready' | 'error'} */
+let reviewedLibraryState = 'loading';
+/** @type {Record<string, string>} */
+let resolution = {};
+/** @type {ScreenViewer | null} */
+let viewer = null;
+let limit = PAGE_SIZE;
+/** @type {Set<string>} */
+const selected = new Set();
+
+const board = createBoard({
+  getItem: key => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value),
+});
+
+/** @param {Snapshot} next */
+function useSnapshot(next) {
+  snapshot = next;
+  screenshotById = new Map(next.screens.map(screenshot => [screenshot.id, screenshot]));
 }
-function compareButton(id, item) {
-  const on = selected.has(id);
-  return `<button data-select="${esc(id)}" aria-pressed="${on}">${actionText(on ? 'Selected' : 'Compare', item)}</button>`;
+
+/** @param {Snapshot} current @returns {import('./views.js').ViewContext} */
+const viewContext = current => ({
+  snapshot: current,
+  screenshotById,
+  isSaved: board.has,
+  isSelected: id => selected.has(id),
+  resolution,
+  category: ui.category.value,
+});
+
+function refreshBoard() {
+  if (snapshot && route() === 'boards') render();
+  else syncActions();
 }
-const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
-const sourceLink = u => isAppleSourceUrl(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
-function media(s, fullSize = false) {
-  const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
-  const full = isFullSizeUrl(candidate) ? candidate : '';
-  const p = String(s.path || '');
-  return isAssetPath(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
+
+Object.assign(window, {
+  HuggingCatalog: {
+    getDeviceBoard: board.readDevice,
+    /** @param {unknown} value */
+    applyRemoteBoard(value) {
+      board.useRemote(value);
+      refreshBoard();
+    },
+    useDeviceBoard() {
+      board.useDevice();
+      refreshBoard();
+    },
+  },
+});
+
+/** @param {Snapshot} current */
+const catalogCategories = current =>
+  [
+    ...new Set(
+      [
+        ...current.apps.flatMap(categoriesForApp),
+        ...current.screens.map(s => s.category),
+        ...current.flows.map(c => c.category),
+        ...current.elements.map(e => e.category),
+      ].flatMap(category => (category ? [category] : []))
+    ),
+  ].sort();
+
+/** @param {CatalogRecord} record */
+function searchableText(record) {
+  const parts = [record.id, record.category, 'name' in record ? record.name : record.title];
+  if ('categories' in record) parts.push(...record.categories);
+  if ('tags' in record) parts.push(record.appName, record.description, ...record.tags);
+  return parts.filter(Boolean).join(' ').toLowerCase();
 }
-function handleMediaError(image) {
-  const preview = image.dataset.preview;
-  const source = image.currentSrc || image.getAttribute('src') || '';
-  if (preview && /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\//.test(source) && image.dataset.previewAttempted !== 'true') {
-    image.dataset.previewAttempted = 'true'; image.removeAttribute('srcset'); image.src = preview; return;
+
+/** @param {CatalogRecord} record */
+function matchesFilters(record) {
+  const query = ui.search.value.toLowerCase().trim(),
+    category = ui.category.value;
+  const inCategory =
+    !category || ('categories' in record ? categoriesForApp(record).includes(category) : record.category === category);
+  return inCategory && (!query || searchableText(record).includes(query));
+}
+
+/** @param {CatalogRecord} record */
+const displayName = record => ('name' in record ? record.name : (record.title ?? ''));
+
+/** @template {CatalogRecord} T @param {T[]} records @returns {T[]} */
+function filtered(records) {
+  const out = records.filter(matchesFilters);
+  if (ui.sort.value === 'name') return out.sort((a, b) => displayName(a).localeCompare(displayName(b)));
+  if (snapshot?.coverage.rankBasis !== 'original-category-feed') return out;
+  const category = ui.category.value;
+  /** @param {CatalogRecord} record */
+  const rank = record =>
+    ('chartRanks' in record ? chartRankIn(record, category || record.category || '') : undefined) ?? 999;
+  return out.sort((a, b) => rank(a) - rank(b));
+}
+
+/** @param {Snapshot} current @param {Route} r @returns {CatalogRecord[]} */
+function routeRecords(current, r) {
+  switch (r) {
+    case 'apps':
+      return filtered(current.apps);
+    case 'screens':
+      return filtered(current.screens.filter(s => !s.curatedOnly));
+    case 'boards':
+      return filtered(current.screens.filter(s => board.has('screen', s.id)));
+    case 'flows':
+      return filtered(current.flows);
+    case 'elements':
+      return filtered(current.elements);
+    default:
+      return [];
   }
-  image.replaceWith(Object.assign(document.createElement('span'), {className:'media-unavailable',textContent:'Image unavailable'}));
 }
-document.addEventListener('load', event => {
-  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) event.target.classList.add('loaded');
-}, true);
-document.addEventListener('error', event => {
-  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media')) handleMediaError(event.target);
-  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-icon')) event.target.replaceWith(Object.assign(document.createElement('div'), {className:'icon-ph'}));
-}, true);
-function appIcon(x) {
-  const p = String(x.iconPath || '');
-  return isAssetPath(p) ? `<img class="icon" data-catalog-icon src="${esc(p)}" loading="eager" alt="">` : '<div class="icon-ph"></div>';
+
+/** @param {Snapshot} current @returns {BoardCollection[]} */
+const boardCollections = current =>
+  [
+    ...current.flows.map(record => ({ kind: /** @type {const} */ ('flows'), record })),
+    ...current.elements.map(record => ({ kind: /** @type {const} */ ('elements'), record })),
+  ].filter(({ kind, record }) => board.has('collection', `${kind}:${record.id}`) && matchesFilters(record));
+
+/** @param {import('./views.js').ViewContext} ctx @param {CatalogRecord} record */
+function card(ctx, record) {
+  if ('name' in record) return appCard(ctx, record);
+  if ('assetIds' in record) return reviewedCard(ctx, record, 'flows');
+  if ('screenId' in record) return reviewedCard(ctx, record, 'elements');
+  return screenCard(ctx, record);
 }
-function screenCard(s) {
-  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions">${saveButton(s.id, s.title || 'screenshot')}${compareButton(s.id, s.title || 'screenshot')}</div></article>`;
+
+/** @param {Snapshot} current */
+function fillHero(current) {
+  const ctx = viewContext(current);
+  const covers = [...current.apps]
+    .sort((a, b) => (a.chartRank ?? 999) - (b.chartRank ?? 999))
+    .flatMap(app => screenshotsFor(ctx, app.assetIds).slice(0, 1));
+  document.querySelectorAll('.float-card').forEach((node, i) => {
+    if (covers[i]) node.innerHTML = media(ctx, covers[i]);
+  });
+  const listed = listingSnapshot?.screens.length ?? current.screens.length;
+  ui.heroCopy.textContent = `Up to 100 free-chart apps per category. ${current.apps.length.toLocaleString()} apps and ${listed.toLocaleString()} listing screenshots to explore.`;
 }
-function screenIds(ids) {
-  const known = new Set((data.screens || []).map(s => s.id));
-  return [...new Set((Array.isArray(ids) ? ids : []).filter(id => known.has(id)))];
-}
-function curationCard(x, kind) {
-  const ids = kind === 'flows' ? x.assetIds : [x.screenId];
-  const shots = ids.map(id => data.screens.find(s => s.id === id)).filter(Boolean);
-  const collectionId = `${kind}:${x.id}`, isSaved = board.has('collection', collectionId);
-  const actions = kind === 'flows' ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${isSaved}">${actionText(isSaved ? 'Saved' : 'Save collection', x.title)}</button>` : ids.map(id => saveButton(id, x.title) + compareButton(id, x.title)).join('');
-  return `<article class="pin collection-card collection-${kind}"><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Open ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s)}</span>`).join('')}</div><span class="pincaption">${esc(x.title)}</span><span class="pinmeta">${esc(x.category || 'Curated reference')}${x.appName ? ` · ${esc(x.appName)}` : ''} · ${shots.length} screenshot${shots.length === 1 ? '' : 's'}</span><p class="collection-description">${esc(x.description || '')}</p></button><div class="pinactions">${actions}</div></article>`;
-}
-function appCard(x) {
-  const shot = data.screens.find(s => (x.assetIds || []).includes(s.id));
-  const selectedCategory = $('#category').value;
-  const category = selectedCategory || x.category || 'App Store';
-  const chartRank = x.chartRanks?.[category] ?? x.chartRank;
-  const rank = data.coverage?.rankBasis === 'original-category-feed' && Number.isInteger(chartRank) ? `<span class="pinrank">#${chartRank} in ${esc(category)}</span>` : '';
-  const labels = selectedCategory ? [selectedCategory] : categoriesForApp(x);
-  return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(labels.join(' · ') || 'App Store')}</span></button></article>`;
-}
-function appDetailCard(s, index, appId) {
-  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions">${saveButton(s.id, s.title || 'screenshot')}${compareButton(s.id, s.title || 'screenshot')}</div></div></article>`;
-}
-function matchesFilters(x) {
-  const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
-  return (!q || [x.name,x.title,x.category,...(Array.isArray(x.categories) ? x.categories : []),x.appName,x.id,x.description,...(Array.isArray(x.tags) ? x.tags : [])].join(' ').toLowerCase().includes(q)) && (!cat || (x.categories ? categoriesForApp(x).includes(cat) : x.category === cat));
-}
-function filtered(items) {
-  const out = items.filter(matchesFilters);
-  if ($('#sort').value === 'name') out.sort((a,b) => (a.name || a.title || '').localeCompare(b.name || b.title || ''));
-  else if (data.coverage?.rankBasis === 'original-category-feed') {
-    const category = $('#category').value;
-    out.sort((a,b) => ((a.chartRanks?.[category] ?? a.chartRank) ?? 999) - ((b.chartRanks?.[category] ?? b.chartRank) ?? 999));
-  }
-  return out;
-}
-function currentItems() {
-  const r = route();
-  const items = r === 'boards' ? data.screens.filter(s => board.has('screen', s.id)) : data[r] || [];
-  return filtered(r === 'screens' ? items.filter(s => !s.curatedOnly) : items);
-}
-function currentBoardCollections() {
-  return [
-    ...(data.flows || []).map(record => ({kind:'flows',record})),
-    ...(data.elements || []).map(record => ({kind:'elements',record}))
-  ].filter(({kind,record}) => board.has('collection', `${kind}:${record.id}`) && matchesFilters(record));
-}
-function mergeCuration(curation) {
-  if (!curation || typeof curation !== 'object') return;
-  const knownScreens = new Set(data.screens.map(s => s.id));
-  for (const s of Array.isArray(curation.screens) ? curation.screens : []) {
-    if (isReviewedScreenshot(s) && !knownScreens.has(s.id)) {
-      data.screens.push(s); knownScreens.add(s.id);
-    }
-  }
-  const flows = (Array.isArray(curation.flows) ? curation.flows : []).map(x => {
-    if (!x || typeof x !== 'object') return null;
-    const assetIds = screenIds(x.assetIds);
-    return x && x.id && x.title && assetIds.length >= 2 ? {...x, assetIds, evidence: x.evidence || 'listing-collection'} : null;
-  }).filter(Boolean);
-  const elements = (Array.isArray(curation.elements) ? curation.elements : []).map(x => {
-    if (!x || typeof x !== 'object') return null;
-    const valid = screenIds([x.screenId]);
-    return x && x.id && x.title && valid.length ? {...x, screenId: valid[0], evidence: x.evidence || 'visual-review'} : null;
-  }).filter(Boolean);
-  data.flows = [...(data.flows || []), ...flows];
-  data.elements = [...(data.elements || []), ...elements];
-}
-function docs() {
-  return `<div class="doc"><h2>Public listings. Clear limits.</h2><p>Hugging App brings together apps and screenshots from Apple's public US App Store feeds. Screenshots are developer-published listing images, not verified recordings of a complete app experience.</p><h3>Where the data comes from</h3><p>App rankings come from category-level free-app charts. Metadata and screenshots come from Apple's Lookup API. Media is cached on this catalog's domain. An app appearing in multiple categories is kept in the first category encountered.</p><p><a href="https://rss.marketingtools.apple.com/" target="_blank" rel="noopener noreferrer">Apple chart feeds ↗</a> · <a href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener noreferrer">Apple Search API ↗</a></p><h3>What this doesn't tell you</h3><p>Listing screenshots do not prove keyboard access, real task flows, accessibility compliance, or current in-app behavior. UI elements are visually reviewed annotations. The Flows section groups related listing screenshots; these collections do not establish actual interaction order.</p><h3>No verified revenue data</h3><p>The raw export retains legacy revenue heuristics for compatibility. These are arbitrary category baselines halved every five ranks, not measured earnings. Hugging App does not use them to compare businesses.</p><h3>Local saved board</h3><p>Saved references stay in this browser on this device. No account is needed. Export your board to keep a portable copy of its references; clearing browser storage removes local saves. Cloud accounts and shared boards are planned for a separate release.</p><h3>Freshness and attribution</h3><p>The timestamp above records when the dataset was built; it is not proof that a scheduled update succeeded today. Screenshots and trademarks belong to their owners. Public availability is not a reuse licence.</p><p><a href="https://github.com/PatchworkMD/open-app-catalog" target="_blank" rel="noopener noreferrer">Catalog source ↗</a></p></div>`;
-}
-function pluginDocs() {
-  return `<div class="doc"><h2>Review your references.</h2><p>Give your agent screenshots, interface text, source code, or an exported board. Ask for up to three prioritized improvements, each tied to evidence and a way to test it.</p><ol><li>Save useful screenshots to your board.</li><li>Export your references and attach the relevant images or code to your agent.</li><li>Ask: “Use Hugging App to review these references. Cite the evidence and mark unseen states as unverified.”</li></ol><p>The plugin reviews material you supply. It does not automatically browse this catalog or fetch third-party libraries. Your host processes supplied content under its own policies.</p><p><a class="text-link" href="https://github.com/PatchworkMD/app-design-research" target="_blank" rel="noopener noreferrer">Plugin source & installation ↗</a> · <a href="https://chatgpt.com/plugins/plugins_6a9e2172a0608191ad0b9dc952483df3" target="_blank" rel="noopener noreferrer">Open in ChatGPT ↗</a></p><p class="meta">Hugging App · Build &amp; Ship iOS Apps.</p></div>`;
-}
-function fillHero() {
-  const nodes = document.querySelectorAll('.float-card');
-  const shots = [...data.apps].sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999)).map(a => data.screens.find(s => (a.assetIds || []).includes(s.id))).filter(Boolean);
-  nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]); });
-  const copy = $('#hero p:not(.hero-title)');
-  if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${catalogScreenCount.toLocaleString()} listing screenshots to explore.`;
-}
+
 function render() {
-  if (!data) return;
-  const r = route(), informational = ['agents','plugin'].includes(r);
-  document.querySelectorAll('nav a').forEach(a => { const on = a.hash === '#' + r; a.classList.toggle('active',on); on ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'); });
-  $('#hero').hidden = r !== 'apps'; $('#title').textContent = routes[r];
-  $('#controls').hidden = informational; $('#export').hidden = informational;
-  $('#kind').disabled = true;
-  const built = new Date(data.coverage?.generatedAt);
-  $('#coverage').textContent = `${data.apps.length.toLocaleString()} apps · ${data.screens.length.toLocaleString()} screenshots · Snapshot ${Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString()} · US App Store`;
-  $('#compareCount').textContent = selected.size;
-  if (informational) { $('#content').className = ''; $('#content').innerHTML = r === 'plugin' ? pluginDocs() : docs(); $('#status').textContent = ''; $('#more').hidden = true; return; }
-  if (['flows','elements'].includes(r) && curationState !== 'ready') {
-    $('#content').className = 'grid'; $('#more').hidden = true; $('#export').disabled = true;
-    $('#status').textContent = curationState === 'loading' ? 'Loading reviewed references…' : 'Reviewed references unavailable';
-    $('#content').innerHTML = curationState === 'loading' ? '<p role="status">Loading reviewed references…</p>' : '<div class="empty"><h2>These references could not load.</h2><p>The app catalog is still available. Try loading the reviewed library again.</p><button data-retry-curation>Try again</button></div>';
+  if (!snapshot) return;
+  const current = snapshot,
+    r = route(),
+    informational = r === 'agents' || r === 'plugin';
+  document.querySelectorAll('nav a').forEach(link => {
+    if (!(link instanceof HTMLAnchorElement)) return;
+    const on = link.hash === '#' + r;
+    link.classList.toggle('active', on);
+    if (on) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+  ui.hero.hidden = r !== 'apps';
+  ui.title.textContent = ROUTES[r];
+  ui.controls.hidden = informational;
+  ui.exportButton.hidden = informational;
+  ui.kind.disabled = true;
+  const built = new Date(current.coverage.generatedAt ?? '');
+  const builtLabel = Number.isNaN(built.getTime()) ? 'date unavailable' : built.toLocaleString();
+  ui.coverage.textContent = `${current.apps.length.toLocaleString()} apps · ${current.screens.length.toLocaleString()} screenshots · Snapshot ${builtLabel} · US App Store`;
+  ui.compareCount.textContent = String(selected.size);
+  if (informational) {
+    ui.content.className = '';
+    ui.content.innerHTML = r === 'plugin' ? pluginDoc() : aboutDoc(policy);
+    ui.status.textContent = '';
+    ui.more.hidden = true;
     return;
   }
-  $('#export').disabled = false;
-  const items = currentItems(), collections = r === 'boards' ? currentBoardCollections() : [];
-  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? (board.remote ? ' · synced board' : ' · saved on this device') : ''}${board.warning ? ' · ' + board.warning : ''}`;
-  $('#more').hidden = items.length <= limit;
-  $('#content').className = ['elements','flows'].includes(r) || collections.length ? 'grid curated-grid' : 'grid';
-  const empty = r === 'boards' ? '<h2>Your board is empty.</h2><p>Save screenshots or a collection, then export your board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h2>No ${esc(routes[r].toLowerCase())} in this dataset</h2><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h2>No matching results</h2><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
-  const collectionCards = collections.map(({kind,record}) => curationCard(record,kind));
-  const screenCards = items.slice(0,limit).map(x => r === 'apps' ? appCard(x) : ['flows','elements'].includes(r) ? curationCard(x, r) : screenCard(x));
-  const cards = [...collectionCards,...screenCards];
-  $('#content').innerHTML = cards.length ? cards.join('') : `<div class="empty">${empty}</div>`;
+  if (isReviewedRoute(r) && reviewedLibraryState !== 'ready') {
+    ui.content.className = 'grid';
+    ui.more.hidden = true;
+    ui.exportButton.disabled = true;
+    const loading = reviewedLibraryState === 'loading';
+    ui.status.textContent = loading ? 'Loading reviewed references…' : 'Reviewed references unavailable';
+    ui.content.innerHTML = loading
+      ? '<p role="status">Loading reviewed references…</p>'
+      : '<div class="empty"><h2>These references could not load.</h2><p>The app catalog is still available. Try loading the reviewed library again.</p><button data-retry-reviewed>Try again</button></div>';
+    return;
+  }
+  ui.exportButton.disabled = false;
+  const ctx = viewContext(current);
+  const records = routeRecords(current, r),
+    collections = r === 'boards' ? boardCollections(current) : [];
+  const where = r === 'boards' ? (board.remote ? ' · synced board' : ' · saved on this device') : '';
+  ui.status.textContent = `${(records.length + collections.length).toLocaleString()} results${where}${board.warning ? ' · ' + board.warning : ''}`;
+  ui.more.hidden = records.length <= limit;
+  ui.content.className = isReviewedRoute(r) || collections.length ? 'grid curated-grid' : 'grid';
+  const cards = [
+    ...collections.map(({ kind, record }) => reviewedCard(ctx, record, kind)),
+    ...records.slice(0, limit).map(record => card(ctx, record)),
+  ];
+  ui.content.innerHTML = cards.length ? cards.join('') : `<div class="empty">${emptyState(r, ROUTES[r])}</div>`;
 }
-function openScreens(shots, index, title, context = '', returnAppId = null) {
-  if (!shots.length) return;
-  viewerState = {shots, index, title, context, returnAppId};
-  $('#viewer').classList.add('screen-viewer');
-  renderScreen();
-  if (!$('#viewer').open) $('#viewer').showModal();
+
+function showViewer() {
+  if (!ui.viewer.open) ui.viewer.showModal();
 }
+
 function renderScreen() {
-  const {shots, index, title, context} = viewerState, s = shots[index];
-  const returnApp = viewerState.returnAppId ? data.apps.find(app => app.id === viewerState.returnAppId) : null;
-  const back = returnApp ? `<button class="screen-back" data-back-app="${esc(returnApp.id)}">Back to app</button>` : '';
-  $('#viewerTitle').textContent = title;
-  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span>${back}<div class="pinactions">${saveButton(s.id, s.title || 'screenshot')}${compareButton(s.id, s.title || 'screenshot')}</div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
-  $('#viewerContent').scrollTop = 0;
-  $('.screen-thumbnails [aria-current="true"]')?.scrollIntoView({block:'nearest',inline:'nearest'});
+  if (!snapshot || !viewer) return;
+  const current = snapshot,
+    returnAppId = viewer.returnAppId;
+  const returnApp = returnAppId ? (current.apps.find(app => app.id === returnAppId) ?? null) : null;
+  ui.viewerTitle.textContent = viewer.title;
+  ui.viewerContent.innerHTML = screenViewer(viewContext(current), viewer, returnApp);
+  ui.viewerContent.scrollTop = 0;
+  ui.viewerContent
+    .querySelector('.screen-thumbnails [aria-current="true"]')
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
-function view(id, returnAppId = null) {
-  const screen = data.screens.find(s => s.id === id); if (!screen) return;
-  const app = data.apps.find(a => (a.assetIds || []).includes(id));
-  const shots = app ? app.assetIds.map(id => data.screens.find(s => s.id === id)).filter(Boolean) : [screen];
-  const context = app ? `${app.category || 'App Store'} · App Store listing screenshots` : '';
-  openScreens(shots, shots.findIndex(s => s.id === id), app?.name || screen.title || 'Screenshot', context, returnAppId);
+
+/** @param {ScreenViewer} next */
+function openScreens(next) {
+  if (!next.screenshots.length) return;
+  viewer = next;
+  ui.viewer.classList.add('screen-viewer');
+  renderScreen();
+  showViewer();
 }
-function openApp(app, focusScreenId = null) {
-  const related = (app.assetIds || []).map(id => data.screens.find(s => s.id === id)).filter(Boolean);
-  viewerState = null;
-  $('#viewer').classList.remove('screen-viewer');
-  $('#viewerTitle').textContent = app.name;
-  // build_search_pages.py only publishes /apps/<id>/ for apps with an App Store URL and screenshots.
-  const source = sourceLink(app.url);
-  const links = [source, source && related.length ? `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>` : ''].filter(Boolean).join(' · ');
-  const rating = Number.isFinite(app.rating) ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
-  const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(categoriesForApp(app).join(' · ') || 'App Store')} · ${related.length} listing screenshot${related.length === 1 ? '' : 's'}${rating}</p></div>`;
-  const gallery = related.length ? `<div class="app-gallery">${related.map((s, i) => appDetailCard(s, i, app.id)).join('')}</div>` : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
-  $('#viewerContent').innerHTML = summary + gallery;
-  if (!$('#viewer').open) $('#viewer').showModal();
-  if (focusScreenId) requestAnimationFrame(() => {
-    const target = [...document.querySelectorAll('.app-detail-image')].find(button => button.dataset.view === focusScreenId);
-    target?.focus({preventScroll:true});
-    target?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+
+/** @param {string} id @param {string | null} returnAppId */
+function view(id, returnAppId) {
+  if (!snapshot) return;
+  const screenshot = screenshotById.get(id);
+  if (!screenshot) return;
+  const app = snapshot.apps.find(a => a.assetIds.includes(id));
+  const screenshots = app ? screenshotsFor(viewContext(snapshot), app.assetIds) : [screenshot];
+  openScreens({
+    screenshots,
+    index: Math.max(
+      0,
+      screenshots.findIndex(s => s.id === id)
+    ),
+    title: app?.name || screenshot.title || 'Screenshot',
+    context: app ? `${app.category || 'App Store'} · App Store listing screenshots` : '',
+    returnAppId,
   });
 }
-function viewCollection(id, kind) {
-  const item = (data[kind] || []).find(x => x.id === id); if (!item) return;
-  const ids = kind === 'flows' ? item.assetIds : [item.screenId];
-  const shots = ids.map(x => data.screens.find(s => s.id === x)).filter(Boolean);
-  const context = kind === 'flows'
-    ? "Listing collection · interaction order unverified. Shown in the curator's order."
-    : `${item.description || 'Reviewed interface pattern'} · Reviewed ${item.reviewedAt || 'date unavailable'}`;
-  openScreens(shots, 0, item.title, context);
+
+/** @param {App} app @param {string | null} [focusScreenId] */
+function openApp(app, focusScreenId = null) {
+  if (!snapshot) return;
+  const ctx = viewContext(snapshot);
+  viewer = null;
+  ui.viewer.classList.remove('screen-viewer');
+  ui.viewerTitle.textContent = app.name;
+  ui.viewerContent.innerHTML = appDetail(ctx, app, screenshotsFor(ctx, app.assetIds));
+  showViewer();
+  if (focusScreenId)
+    requestAnimationFrame(() => {
+      const target = [...ui.viewerContent.querySelectorAll('.app-detail-image')].find(
+        button => button instanceof HTMLElement && button.dataset.view === focusScreenId
+      );
+      if (!(target instanceof HTMLElement)) return;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'instant' : 'smooth' });
+    });
+}
+
+/** @param {string} id @param {string | undefined} kind */
+function viewReviewed(id, kind) {
+  if (!snapshot || (kind !== 'flows' && kind !== 'elements')) return;
+  const record = kind === 'flows' ? snapshot.flows.find(x => x.id === id) : snapshot.elements.find(x => x.id === id);
+  if (!record) return;
+  openScreens({
+    screenshots: screenshotsFor(viewContext(snapshot), reviewedScreenshotIds(record)),
+    index: 0,
+    title: record.title,
+    context:
+      kind === 'flows'
+        ? "Listing collection · interaction order unverified. Shown in the curator's order."
+        : `${record.description || 'Reviewed interface pattern'} · Reviewed ${record.reviewedAt || 'date unavailable'}`,
+    returnAppId: null,
+  });
 }
 
 function syncActions() {
-  document.querySelectorAll('[data-save],[data-select],[data-save-collection]').forEach(b => {
-    const collection = b.dataset.saveCollection, save = Boolean(b.dataset.save), on = collection ? board.has('collection', collection) : save ? board.has('screen', b.dataset.save) : selected.has(b.dataset.select);
-    const text = collection ? (on ? 'Saved' : 'Save collection') : on ? (save ? 'Saved' : 'Selected') : (save ? 'Save' : 'Compare');
-    const label = b.querySelector('.action-text');
-    if (label) label.textContent = text; else b.textContent = text;
-    b.setAttribute('aria-pressed', String(on));
+  document.querySelectorAll('[data-save],[data-select],[data-save-collection]').forEach(button => {
+    if (!(button instanceof HTMLElement)) return;
+    const { saveCollection, save, select } = button.dataset;
+    const on = saveCollection
+      ? board.has('collection', saveCollection)
+      : save
+        ? board.has('screen', save)
+        : selected.has(select ?? '');
+    const text = saveCollection
+      ? on
+        ? 'Saved'
+        : 'Save collection'
+      : save
+        ? on
+          ? 'Saved'
+          : 'Save'
+        : on
+          ? 'Selected'
+          : 'Compare';
+    const label = button.querySelector('.action-text');
+    if (label) label.textContent = text;
+    else button.textContent = text;
+    button.setAttribute('aria-pressed', String(on));
   });
-  $('#compareCount').textContent = selected.size;
+  ui.compareCount.textContent = String(selected.size);
 }
-function download(value,name) {
-  const u = URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
-  const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u),1000);
+
+/** @param {unknown} value @param {string} name */
+function download(value, name) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-document.addEventListener('click', e => {
-  const b = e.target.closest('[data-save],[data-save-collection],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb],[data-retry-curation],[data-back-app]'); if (!b || !data) return;
-  if (b.hasAttribute('data-retry-curation')) { loadCuration(); return; }
-  if (b.hasAttribute('data-step') || b.hasAttribute('data-thumb')) {
-    if (!viewerState) return;
-    const index = b.hasAttribute('data-thumb') ? Number(b.dataset.thumb) : viewerState.index + Number(b.dataset.step);
-    if (index < 0 || index >= viewerState.shots.length) return;
-    viewerState.index = index; renderScreen();
-    const target = b.hasAttribute('data-thumb') ? `[data-thumb="${index}"]` : `[data-step="${b.dataset.step}"]`;
-    const next = $(target); (next && !next.disabled ? next : $('.screen-thumbnails [aria-current="true"]'))?.focus({preventScroll:true});
-  } else if (b.hasAttribute('data-reset')) { $('#search').value = ''; $('#category').value = ''; limit = 48; render(); }
-  else if (b.dataset.saveCollection || b.dataset.save) {
-    const kind = b.dataset.saveCollection ? 'collection' : 'screen', id = b.dataset.saveCollection || b.dataset.save;
-    const saved = board.toggle(kind, id);
-    if (board.remote) window.dispatchEvent(new CustomEvent('hugging:board-change', {detail:{kind,id,saved}}));
-    if (route() === 'boards') render();
-    syncActions();
-    if (board.warning) $('#status').textContent = board.warning;
-  } else if (b.dataset.select) {
-    const id = b.dataset.select;
-    if (selected.has(id)) selected.delete(id); else if (selected.size < 4) selected.add(id); else { $('#status').textContent = 'Compare up to four screens at a time'; return; }
-    syncActions();
-  } else if (b.dataset.view) view(b.dataset.view, b.dataset.returnApp || null);
-  else if (b.dataset.backApp) {
-    const app = data.apps.find(item => item.id === b.dataset.backApp);
-    const focusScreenId = viewerState?.shots[viewerState.index]?.id;
-    if (app) openApp(app, focusScreenId);
-  }
-  else if (b.dataset.collection) viewCollection(b.dataset.collection, b.dataset.collectionKind);
+
+/** @param {'screen' | 'collection'} kind @param {string} id */
+function toggleSaved(kind, id) {
+  const saved = board.toggle(kind, id);
+  if (board.remote) window.dispatchEvent(new CustomEvent('hugging:board-change', { detail: { kind, id, saved } }));
+  if (route() === 'boards') render();
+  syncActions();
+  if (board.warning) ui.status.textContent = board.warning;
+}
+
+/** @param {string} id */
+function toggleSelected(id) {
+  if (selected.has(id)) selected.delete(id);
+  else if (selected.size < MAX_COMPARISON) selected.add(id);
   else {
-    const x = data.apps.find(x => x.id === b.dataset.related); if (!x) return;
-    openApp(x);
+    ui.status.textContent = 'Compare up to four screenshots at a time';
+    return;
   }
-});
-document.addEventListener('click', e => { if (e.target.closest('[data-reload]')) location.reload(); });
-$('.skip-link').addEventListener('click', e => { e.preventDefault(); $('#title').focus(); });
-$('.hero-cta').addEventListener('click', () => $('.heading').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'}));
-$('#compare').onclick = () => {
-  if (!data) return;
-  if (selected.size < 2) { $('#status').textContent = 'Select at least two screens to compare'; return; }
-  viewerState = null; $('#viewer').classList.remove('screen-viewer');
-  $('#viewerTitle').textContent = 'Compare references';
-  $('#viewerContent').innerHTML = `<div class="comparegrid">${data.screens.filter(s => selected.has(s.id)).map(screenCard).join('')}</div>`;
-  if (!$('#viewer').open) $('#viewer').showModal();
-};
-document.addEventListener('keydown', e => {
-  if (!$('#viewer').open || !viewerState || e.altKey || e.ctrlKey || e.metaKey || !['ArrowLeft','ArrowRight'].includes(e.key) || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
-  e.preventDefault();
-  const index = viewerState.index + (e.key === 'ArrowRight' ? 1 : -1);
-  if (index >= 0 && index < viewerState.shots.length) { viewerState.index = index; renderScreen(); $('.screen-thumbnails [aria-current="true"]')?.focus({preventScroll:true}); }
-});
-$('#viewer').addEventListener('close', () => { viewerState = null; $('#viewer').classList.remove('screen-viewer'); });
-$('#close').onclick = () => $('#viewer').close();
-$('#viewer').addEventListener('click', e => { if (e.target === $('#viewer')) $('#viewer').close(); });
-$('#more').onclick = () => { limit += 48; render(); };
-['search','category','kind','sort'].forEach(id => $('#' + id).addEventListener('input', () => { limit = 48; render(); }));
-window.addEventListener('hashchange', () => { $('#viewer').close(); limit = 48; $('#search').value = ''; $('#kind').value = ''; $('#category').value = ''; render(); window.scrollTo({top:0,behavior:'instant'}); });
-$('#export').onclick = () => {
-  if (!data || ['agents','plugin'].includes(route())) return;
-  const items = currentItems();
-  const collections = route() === 'boards' ? currentBoardCollections().map(({kind,record}) => ({kind,...record})) : undefined;
-  download({name:'Hugging App references',exportedAt:new Date().toISOString(),coverage:data.coverage,route:route(),records:items,...(collections ? {collections} : {})},`hugging-app-${route()}.json`);
-};
-$('#export').disabled = true;
-$('#content').className = 'grid';
-$('#content').innerHTML = Array(12).fill('<div class="skel" aria-hidden="true"></div>').join('');
-Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch(() => ({})), fetch('data.json').then(r => { if (!r.ok) throw Error('Catalog unavailable'); return r.json(); })]).then(([sources, d]) => {
-  resolutionMap = sources && typeof sources === 'object' && !Array.isArray(sources) ? sources : {};
-  data = normalizeSnapshot(d);
-  catalogScreenCount = data.screens.length;
-  const cats = catalogCategories();
-  $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
-  fillHero(); render(); $('#export').disabled = false;
-  loadCuration();
-}).catch(() => {
-  $('#hero').hidden = true; $('#coverage').textContent = 'The catalog could not load.';
-  $('#content').innerHTML = '<div class="empty"><h2>We could not load the library.</h2><p>Your saved board remains on this device.</p><button data-reload>Try again</button></div>';
+  syncActions();
+}
+
+/** @param {number} index @param {string} focusSelector */
+function stepViewer(index, focusSelector) {
+  if (!viewer || index < 0 || index >= viewer.screenshots.length) return;
+  viewer.index = index;
+  renderScreen();
+  const next = ui.viewerContent.querySelector(focusSelector);
+  const target =
+    next instanceof HTMLButtonElement && !next.disabled
+      ? next
+      : ui.viewerContent.querySelector('.screen-thumbnails [aria-current="true"]');
+  if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+}
+
+const ACTIONS =
+  '[data-save],[data-save-collection],[data-select],[data-view],[data-related],[data-collection],[data-reset],[data-step],[data-thumb],[data-retry-reviewed],[data-back-app],[data-reload]';
+
+document.addEventListener('click', event => {
+  const button = event.target instanceof Element ? event.target.closest(ACTIONS) : null;
+  if (!(button instanceof HTMLElement)) return;
+  const d = button.dataset;
+  if ('reload' in d) return location.reload();
+  if (!snapshot) return;
+  const current = snapshot;
+  if ('retryReviewed' in d) loadReviewedLibrary();
+  else if (d.thumb !== undefined && viewer) stepViewer(Number(d.thumb), `[data-thumb="${d.thumb}"]`);
+  else if (d.step !== undefined && viewer) stepViewer(viewer.index + Number(d.step), `[data-step="${d.step}"]`);
+  else if ('reset' in d) {
+    ui.search.value = '';
+    ui.category.value = '';
+    limit = PAGE_SIZE;
+    render();
+  } else if (d.saveCollection) toggleSaved('collection', d.saveCollection);
+  else if (d.save) toggleSaved('screen', d.save);
+  else if (d.select) toggleSelected(d.select);
+  else if (d.view) view(d.view, d.returnApp || null);
+  else if (d.backApp) {
+    const app = current.apps.find(item => item.id === d.backApp);
+    if (app) openApp(app, viewer?.screenshots[viewer.index]?.id ?? null);
+  } else if (d.collection) viewReviewed(d.collection, d.collectionKind);
+  else if (d.related) {
+    const app = current.apps.find(item => item.id === d.related);
+    if (app) openApp(app);
+  }
 });
 
-async function loadCuration() {
-  curationState = 'loading'; render();
+ui.skipLink.addEventListener('click', event => {
+  event.preventDefault();
+  ui.title.focus();
+});
+ui.heroCta.addEventListener('click', () =>
+  ui.heading.scrollIntoView({ behavior: prefersReducedMotion() ? 'instant' : 'smooth' })
+);
+ui.compare.addEventListener('click', () => {
+  if (!snapshot) return;
+  if (selected.size < 2) {
+    ui.status.textContent = 'Select at least two screenshots to compare';
+    return;
+  }
+  const ctx = viewContext(snapshot);
+  viewer = null;
+  ui.viewer.classList.remove('screen-viewer');
+  ui.viewerTitle.textContent = 'Compare references';
+  ui.viewerContent.innerHTML = `<div class="comparegrid">${snapshot.screens
+    .filter(s => selected.has(s.id))
+    .map(s => screenCard(ctx, s))
+    .join('')}</div>`;
+  showViewer();
+});
+document.addEventListener('keydown', event => {
+  if (!ui.viewer.open || !viewer || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  if (
+    event.target instanceof HTMLInputElement ||
+    event.target instanceof HTMLTextAreaElement ||
+    event.target instanceof HTMLSelectElement
+  )
+    return;
+  event.preventDefault();
+  stepViewer(viewer.index + (event.key === 'ArrowRight' ? 1 : -1), '.screen-thumbnails [aria-current="true"]');
+});
+ui.viewer.addEventListener('close', () => {
+  viewer = null;
+  ui.viewer.classList.remove('screen-viewer');
+});
+ui.close.addEventListener('click', () => ui.viewer.close());
+ui.viewer.addEventListener('click', event => {
+  if (event.target === ui.viewer) ui.viewer.close();
+});
+ui.more.addEventListener('click', () => {
+  limit += PAGE_SIZE;
+  render();
+});
+for (const control of [ui.search, ui.category, ui.kind, ui.sort])
+  control.addEventListener('input', () => {
+    limit = PAGE_SIZE;
+    render();
+  });
+window.addEventListener('hashchange', () => {
+  ui.viewer.close();
+  limit = PAGE_SIZE;
+  ui.search.value = '';
+  ui.kind.value = '';
+  ui.category.value = '';
+  render();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+});
+ui.exportButton.addEventListener('click', () => {
+  const r = route();
+  if (!snapshot || r === 'agents' || r === 'plugin') return;
+  const collections =
+    r === 'boards' ? boardCollections(snapshot).map(({ kind, record }) => ({ kind, ...record })) : undefined;
+  download(
+    {
+      name: 'Hugging App references',
+      exportedAt: new Date().toISOString(),
+      coverage: snapshot.coverage,
+      route: r,
+      records: routeRecords(snapshot, r),
+      ...(collections ? { collections } : {}),
+    },
+    `hugging-app-${r}.json`
+  );
+});
+
+document.addEventListener(
+  'load',
+  event => {
+    if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-catalog-media'))
+      event.target.classList.add('loaded');
+  },
+  true
+);
+document.addEventListener(
+  'error',
+  event => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement)) return;
+    if (image.hasAttribute('data-catalog-icon'))
+      image.replaceWith(Object.assign(document.createElement('div'), { className: 'icon-ph' }));
+    if (!image.hasAttribute('data-catalog-media')) return;
+    const preview = image.dataset.preview;
+    const source = image.currentSrc || image.getAttribute('src') || '';
+    if (
+      preview &&
+      /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\//.test(source) &&
+      image.dataset.previewAttempted !== 'true'
+    ) {
+      image.dataset.previewAttempted = 'true';
+      image.removeAttribute('srcset');
+      image.src = preview;
+      return;
+    }
+    image.replaceWith(
+      Object.assign(document.createElement('span'), {
+        className: 'media-unavailable',
+        textContent: 'Image unavailable',
+      })
+    );
+  },
+  true
+);
+
+/** @param {Snapshot} current */
+function fillCategories(current) {
+  const chosen = ui.category.value;
+  ui.category.innerHTML =
+    '<option value="">All categories</option>' +
+    catalogCategories(current)
+      .map(c => `<option>${esc(c)}</option>`)
+      .join('');
+  ui.category.value = chosen;
+}
+
+/** @param {string} url */
+async function fetchJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+  return /** @type {unknown} */ (await response.json());
+}
+
+async function loadReviewedLibrary() {
+  reviewedLibraryState = 'loading';
+  render();
   try {
-    const response = await fetch('curation.json');
-    if (!response.ok) throw Error('Reviewed library unavailable');
-    const curation = await response.json();
-    if (!curation || !Array.isArray(curation.flows) || !Array.isArray(curation.elements)) throw Error('Invalid reviewed library');
-    mergeCuration(curation);
-    const category = $('#category').value;
-    const cats = catalogCategories();
-    $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
-    $('#category').value = category;
-    curationState = 'ready'; fillHero();
-  } catch { curationState = 'error'; }
+    if (!listingSnapshot) return;
+    const merged = mergeReviewedLibrary(listingSnapshot, await fetchJson('curation.json'));
+    useSnapshot(merged);
+    fillCategories(merged);
+    reviewedLibraryState = 'ready';
+    fillHero(merged);
+  } catch {
+    reviewedLibraryState = 'error';
+  }
   render();
 }
+
+async function start() {
+  ui.exportButton.disabled = true;
+  ui.content.className = 'grid';
+  ui.content.innerHTML = Array(12).fill('<div class="skel" aria-hidden="true"></div>').join('');
+  try {
+    const [sources, listing] = await Promise.all([
+      fetchJson('image-sources.json').catch(() => ({})),
+      fetchJson('data.json'),
+    ]);
+    resolution =
+      sources && typeof sources === 'object' && !Array.isArray(sources)
+        ? Object.fromEntries(Object.entries(sources).filter(([, url]) => typeof url === 'string'))
+        : {};
+    listingSnapshot = readSnapshot(listing);
+    useSnapshot(listingSnapshot);
+  } catch {
+    ui.hero.hidden = true;
+    ui.coverage.textContent = 'The catalog could not load.';
+    ui.content.innerHTML =
+      '<div class="empty"><h2>We could not load the catalog.</h2><p>Your board remains on this device.</p><button data-reload>Try again</button></div>';
+    return;
+  }
+  fillCategories(listingSnapshot);
+  fillHero(listingSnapshot);
+  render();
+  ui.exportButton.disabled = false;
+  loadReviewedLibrary();
+}
+
+start();
