@@ -16,11 +16,11 @@ all of it.
 
 ## Sources (all free, public, no auth)
 
-| Data | Source |
-|---|---|
-| Chart rankings | [iTunes RSS top-charts feed](https://rss.marketingtools.apple.com/) |
+| Data                               | Source                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| Chart rankings                     | [iTunes RSS top-charts feed](https://rss.marketingtools.apple.com/)    |
 | App metadata, ratings, screenshots | [iTunes Lookup API](https://performance-partners.apple.com/search-api) |
-| Screenshots | Each developer's own public App Store listing images, served by Apple |
+| Screenshots                        | Each developer's own public App Store listing images, served by Apple  |
 
 Revenue isn't scraped from anywhere, because no public source has it.
 `pipeline/fetch.py` computes a transparent, documented estimate from chart
@@ -100,26 +100,16 @@ Neither database is deployed or exposed by the website.
 ## Local checks
 
 ```sh
-python3 -m unittest discover -s pipeline -p 'test_*.py'
-node --check site/app.js
-node tests/site.test.cjs
-node tests/curation.test.cjs
-node tests/media.test.cjs
-node tests/resolution.test.cjs
-node tests/viewer.test.cjs
-node tests/local-first.test.cjs
+npm ci
+npx playwright install chromium-headless-shell
+PLAYWRIGHT_CHANNEL=chromium-headless-shell npm run verify
 ```
 
-Pull requests and `push/**` branches run `.github/workflows/validate.yml` with
-read-only repository access and no deployment credentials. It builds reference
-pages, runs pipeline and browser tests, and uploads browser screenshots. Main
-routes are checked for horizontal overflow at 390px and 320px.
+`npm run verify` runs the JavaScript syntax checks, pipeline tests, reference page build, and the site and Worker tests. `npm run verify:fast` skips the browser and runs on every commit through the Husky pre-commit hook, after lint-staged formats the staged files.
 
-The browser check covers keyboard access, filters, routes, board persistence,
-exports, comparison state, mobile layout, and load/storage failures. It uses
-an isolated browser profile and an in-memory local route, so it needs no preview
-server or listening port. Set `CATALOG_TEST_URL` to test a deployed preview.
-It does not mutate the live site.
+Browser tests serve a synthetic fixture snapshot (60 apps in 3 categories), so a catalog refresh cannot break them. Set `CATALOG_SNAPSHOT=live` to test against `site/data.json`, or set it to a file path for another snapshot. Set `CATALOG_TEST_URL` to test a deployed preview; that run does not mutate the live site. Screenshots land in `$TMPDIR/hugging-app-evidence/`.
+
+Pull requests and `push/**` branches run `npm run verify` in `.github/workflows/validate.yml`, with read-only repository access and no deployment credentials, then upload the screenshots. Main routes are checked for horizontal overflow at 390px and 320px.
 
 ## License
 

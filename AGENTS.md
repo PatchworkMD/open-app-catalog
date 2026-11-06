@@ -4,17 +4,21 @@ Read [CONTEXT.md](CONTEXT.md) and [GLOSSARY.md](GLOSSARY.md) first, and use the 
 
 ## Entry points
 
-| Area | Start here |
-|---|---|
-| Browser app | `site/index.html`, `site/app.js`, `site/style.css` |
-| Media and static serving | `worker/index.js` (Cloudflare Worker, R2 `/assets/*`) |
-| Catalog refresh | `pipeline/fetch.py` (Apple feeds, writes `site/data.json`) |
-| Reference pages | `pipeline/build_search_pages.py` |
-| Deployment check | `pipeline/verify_deployment.py` |
-| Reviewed library | `site/curation.json` |
-| Deferred cloud boards | `site/cloud-boards.mjs`, `firestore.rules` (not loaded by the public page, see ADR-0001) |
-| Tests | `pipeline/test_*.py`, `tests/*.test.cjs` |
-| CI | `.github/workflows/validate.yml` (PRs), `.github/workflows/update.yml` (refresh and deploy on master) |
+| Area                     | Start here                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Browser app              | `site/index.html`, `site/app.js`, `site/style.css`                                                    |
+| Media and static serving | `worker/index.js` (Cloudflare Worker, R2 `/assets/*`)                                                 |
+| Catalog refresh          | `pipeline/fetch.py` (Apple feeds, writes `site/data.json`)                                            |
+| Reference pages          | `pipeline/build_search_pages.py`                                                                      |
+| Deployment check         | `pipeline/verify_deployment.py`                                                                       |
+| Reviewed library         | `site/curation.json`                                                                                  |
+| Deferred cloud boards    | `site/cloud-boards.mjs`, `firestore.rules` (not loaded by the public page, see ADR-0001)              |
+| Tests                    | `pipeline/test_*.py`, `tests/*.test.cjs`                                                              |
+| CI                       | `.github/workflows/validate.yml` (PRs), `.github/workflows/update.yml` (refresh and deploy on master) |
+
+## Verify
+
+`npm ci`, then `PLAYWRIGHT_CHANNEL=chromium-headless-shell npm run verify`. The pre-commit hook runs `npm run verify:fast`.
 
 ## Rules
 
