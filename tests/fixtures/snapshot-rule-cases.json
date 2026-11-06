@@ -16,7 +16,12 @@
       "assets/gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg.png",
       "assets/../aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
       null,
-      42
+      42,
+      ["assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"],
+      {
+        "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
+      },
+      true
     ]
   },
   "screenshotId": {
@@ -29,7 +34,10 @@
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      null
+      null,
+      ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      true,
+      1
     ]
   },
   "appleSourceUrl": {
@@ -40,7 +48,9 @@
       "https://apps.apple.com.evil.test/x",
       "https://evil.test/https://apps.apple.com/",
       "javascript:alert(1)",
-      null
+      null,
+      ["https://apps.apple.com/us/app/x/id1"],
+      false
     ]
   },
   "fullSizeUrl": {
@@ -49,7 +59,8 @@
       "https://is1-ssl.mzstatic.com/image/thumb/a/640x1386bb.jpg",
       "https://is1-ssl.mzstatic.com/image/thumb/a/1290x2796bb.png?x",
       "https://evil.test/image/thumb/a/1290x2796bb.png",
-      null
+      null,
+      ["https://is1-ssl.mzstatic.com/image/thumb/Purple/v4/a/b.png/1290x2796bb.png"]
     ]
   },
   "reviewedScreenshot": {
@@ -58,6 +69,12 @@
         "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
         "sourceUrl": "https://apps.apple.com/us/app/x/id1"
+      },
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+        "sourceUrl": "https://apps.apple.com/us/app/x/id1",
+        "title": 7
       }
     ],
     "invalid": [
@@ -76,7 +93,22 @@
         "path": "assets/x.png",
         "sourceUrl": "https://apps.apple.com/"
       },
-      null
+      null,
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": ["assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"],
+        "sourceUrl": "https://apps.apple.com/us/app/x/id1"
+      },
+      {
+        "id": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+        "sourceUrl": "https://apps.apple.com/us/app/x/id1"
+      },
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+        "sourceUrl": ["https://apps.apple.com/us/app/x/id1"]
+      }
     ]
   }
 }
