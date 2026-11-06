@@ -271,6 +271,8 @@ class BuildTest(unittest.TestCase):
         self.assertIsNone(fetch.read_lookup_result({**base, "userRatingCount": -3})["userRatingCount"])
         overflow = json.loads('{"results": [{"trackId": 1, "trackName": "App", "averageUserRating": 1e999}]}')
         self.assertIsNone(fetch.read_lookup_results(overflow)[0]["averageUserRating"])
+        huge = json.loads('{"results": [{"trackId": 1, "trackName": "App", "averageUserRating": 1' + '0' * 400 + '}]}')
+        self.assertIsNone(fetch.read_lookup_results(huge)[0]["averageUserRating"])
 
     def test_upload_error_does_not_replace_dataset(self):
         with tempfile.TemporaryDirectory() as tmp:
