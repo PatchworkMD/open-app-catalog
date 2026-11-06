@@ -39,7 +39,8 @@ class SnapshotTest(unittest.TestCase):
                     with self.assertRaises(TypeError):
                         intake(case)
                 else:
-                    self.assertEqual(intake(case), case['expected'])
+                    # Compare serialized JSON so 1 and 1.0 differ, as they would in a published Snapshot.
+                    self.assertEqual(json.dumps(intake(case), sort_keys=True), json.dumps(case['expected'], sort_keys=True))
 
 
 if __name__ == '__main__':

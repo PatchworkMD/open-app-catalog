@@ -8,6 +8,7 @@ import { isAppleSourceUrl, isAssetPath, isFullSizeUrl } from './snapshot.js';
  * @typedef {import('./snapshot.js').UiElement} UiElement
  * @typedef {import('./snapshot.js').Snapshot} Snapshot
  * @typedef {'flows' | 'elements'} ReviewedKind
+ * @typedef {{kind: 'flows', record: Collection} | {kind: 'elements', record: UiElement}} ReviewedEntry
  * @typedef {{
  *   snapshot: Snapshot,
  *   screenshotById: Map<string, Screenshot>,
@@ -77,12 +78,18 @@ export function screenCard(ctx, screenshot) {
   return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(screenshot.id)}" aria-label="Open ${esc(label)}">${media(ctx, screenshot)}</button><p class="pincaption">${esc(screenshot.title || 'Screenshot')}</p><span class="pinmeta">${esc(screenshot.category || 'App Store')}</span><div class="pinactions">${screenActions(ctx, screenshot.id, label)}</div></article>`;
 }
 
-/** @param {Collection | UiElement} record @returns {string[]} */
-export const reviewedScreenshotIds = record => ('assetIds' in record ? record.assetIds : [record.screenId]);
+/**
+ * The Screenshots a reviewed record shows, chosen by its known kind rather than by which fields it carries.
+ * @param {ReviewedEntry} entry
+ * @returns {string[]}
+ */
+export const reviewedScreenshotIds = entry =>
+  entry.kind === 'flows' ? entry.record.assetIds : [entry.record.screenId];
 
-/** @param {ViewContext} ctx @param {Collection | UiElement} record @param {ReviewedKind} kind */
-export function reviewedCard(ctx, record, kind) {
-  const ids = reviewedScreenshotIds(record);
+/** @param {ViewContext} ctx @param {ReviewedEntry} entry */
+export function reviewedCard(ctx, entry) {
+  const { kind, record } = entry;
+  const ids = reviewedScreenshotIds(entry);
   const screenshots = screenshotsFor(ctx, ids);
   const collectionId = `${kind}:${record.id}`,
     saved = ctx.isSaved('collection', collectionId);

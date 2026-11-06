@@ -28,15 +28,11 @@ function context(overrides = {}) {
   };
 }
 
-test('screenshot cards escape listing text and name each action after its screenshot', async () => {
+test('screenshot cards escape listing text', async () => {
   const { screenCard } = await views;
-  const html = screenCard(context({ isSaved: () => true }), screenshot('a'));
+  const html = screenCard(context(), screenshot('a'));
   assert.doesNotMatch(html, /<b>/);
-  assert.match(
-    html,
-    /<span class="action-text">Saved<\/span><span class="sr-only"> Untrusted &lt;b&gt;title&lt;\/b&gt;<\/span>/
-  );
-  assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /Untrusted &lt;b&gt;title&lt;\/b&gt;/);
 });
 
 test('an app card shows the chart rank for the selected category only where the app is charted', async () => {

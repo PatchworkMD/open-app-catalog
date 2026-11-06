@@ -1,7 +1,14 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { catalogBase, launchBrowser, evidencePath, fitsViewport, fixtureSnapshot } = require('./browser-fixture.cjs');
+const {
+  catalogBase,
+  launchBrowser,
+  evidencePath,
+  fitsViewport,
+  fixtureSnapshot,
+  fixtureReviewedLibrary,
+} = require('./browser-fixture.cjs');
 
 let browser;
 before(async () => {
@@ -236,18 +243,69 @@ test('chart rank badges are opaque and meet normal-text contrast', async () => {
 test('decorative hero motion stops within five seconds', async () => {
   const { page } = await openCatalog('#apps');
   await page.locator('.app-open').first().waitFor();
-  const endTimes = await page.evaluate(() =>
-    [...document.querySelectorAll('.hero *')].flatMap(el =>
-      el.getAnimations().map(animation => {
-        const timing = animation.effect.getComputedTiming();
-        return timing.endTime;
-      })
-    )
-  );
+  // Read the declared timing: finished animations leave getAnimations(), so a slow load would hide them.
+  const endTimes = await page.evaluate(() => {
+    const seconds = value => value.split(',').map(part => parseFloat(part) * (part.trim().endsWith('ms') ? 0.001 : 1));
+    return [...document.querySelectorAll('.hero *')].flatMap(el => {
+      const style = getComputedStyle(el);
+      if (style.animationName === 'none') return [];
+      const durations = seconds(style.animationDuration),
+        delays = seconds(style.animationDelay);
+      return style.animationIterationCount.split(',').map((count, i) => {
+        const iterations = count.trim() === 'infinite' ? Infinity : Number(count);
+        return (delays[i % delays.length] + durations[i % durations.length] * iterations) * 1000;
+      });
+    });
+  });
   assert(endTimes.length > 0, 'the hero animates on load');
   assert(
     endTimes.every(end => Number.isFinite(end) && end <= 5000),
     `hero animations end at ${endTimes.join(', ')}ms`
   );
+  await page.close();
+});
+
+test('save and compare actions are named after their screenshot and report their state', async () => {
+  const { page, errors } = await openCatalog('#screens');
+  const save = page.getByRole('button', { name: 'Save Fixture App 01', exact: true }).first();
+  await save.waitFor();
+  assert.equal(await save.getAttribute('aria-pressed'), 'false');
+  await save.click();
+  const saved = page.getByRole('button', { name: 'Saved Fixture App 01', exact: true, pressed: true }).first();
+  await saved.waitFor();
+  const compare = page.getByRole('button', { name: 'Compare Fixture App 01', exact: true }).first();
+  await compare.click();
+  await page.getByRole('button', { name: 'Selected Fixture App 01', exact: true, pressed: true }).first().waitFor();
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('fields from another kind cannot change how a record browses', async () => {
+  const { page, base, errors } = await openCatalog(null);
+  const snapshot = fixtureSnapshot();
+  snapshot.screens[0] = { ...snapshot.screens[0], name: 7, categories: {}, assetIds: 'x', chartRanks: [] };
+  const reviewed = fixtureReviewedLibrary();
+  reviewed.elements[0] = { ...reviewed.elements[0], assetIds: {} };
+  reviewed.flows[0] = { ...reviewed.flows[0], screenId: 7, name: 'Not an app' };
+  await page.route('**/data.json', route =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot) })
+  );
+  await page.route('**/curation.json', route =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(reviewed) })
+  );
+  await page.goto(base + '#screens');
+  await page.locator('#content .pin').first().waitFor();
+  await page.getByRole('combobox', { name: 'Sort' }).selectOption('name');
+  await page.getByRole('combobox', { name: 'Category' }).selectOption('Education');
+  await page.getByRole('searchbox', { name: 'Search catalog' }).fill('Fixture App 01');
+  assert.equal(await page.getByRole('button', { name: 'Open Fixture App 01', exact: true }).count(), 3);
+  await page.goto(base + '#elements');
+  await page.getByRole('button', { name: 'Open Tab bar', exact: true }).click();
+  assert.equal(await page.locator('.screen-thumbnails button').count(), 1);
+  await page.keyboard.press('Escape');
+  await page.goto(base + '#flows');
+  await page.getByRole('button', { name: 'Open Community and discovery', exact: true }).click();
+  assert.equal(await page.locator('.screen-thumbnails button').count(), 3);
+  assert.deepEqual(errors, []);
   await page.close();
 });

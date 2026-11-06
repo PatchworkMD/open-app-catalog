@@ -248,6 +248,30 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(shared["chartRanks"], {"One": 2, "Two": 1})
         self.assertEqual([row["catalogApps"] for row in result["coverage"]["categoryCoverage"]], [2, 2])
 
+    def test_non_finite_metadata_never_reaches_publication(self):
+        for value in (float("inf"), float("nan")):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                out = root / "data.json"
+                out.write_text('{"old": true}')
+                snapshot = {"apps": [{"id": "a", "rating": value}], "screens": [{"path": "assets/a.jpg"}]}
+                with patch.object(fetch, "SITE_DIR", root), \
+                     patch.object(fetch, "build", return_value=snapshot), \
+                     patch.object(fetch, "upload_new_assets") as upload:
+                    with self.assertRaises(ValueError):
+                        fetch.main()
+                    upload.assert_not_called()
+                self.assertEqual(json.loads(out.read_text()), {"old": True})
+
+    def test_lookup_ratings_are_finite_and_on_the_five_point_scale(self):
+        base = {"trackId": 1, "trackName": "App"}
+        for raw, kept in ((4.5, 4.5), (0, 0), (5, 5), (float("inf"), None), (float("nan"), None), (7, None), (-1, None), (True, None)):
+            with self.subTest(raw=raw):
+                self.assertEqual(fetch.read_lookup_result({**base, "averageUserRating": raw})["averageUserRating"], kept)
+        self.assertIsNone(fetch.read_lookup_result({**base, "userRatingCount": -3})["userRatingCount"])
+        overflow = json.loads('{"results": [{"trackId": 1, "trackName": "App", "averageUserRating": 1e999}]}')
+        self.assertIsNone(fetch.read_lookup_results(overflow)[0]["averageUserRating"])
+
     def test_upload_error_does_not_replace_dataset(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

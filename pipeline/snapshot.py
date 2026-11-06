@@ -36,14 +36,22 @@ def _text(value: object) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
-def _integer(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
-def _finite(value: object) -> float | None:
+def _number(value: object) -> float | int | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return value if math.isfinite(value) else None
+
+
+def chart_rank(value: object) -> int | None:
+    """A chart rank is a whole number from 1. JSON 1.0 and 1 are the same rank, as in the browser."""
+    number = _number(value)
+    return int(number) if number is not None and number == int(number) and number >= 1 else None
+
+
+def rating(value: object) -> float | int | None:
+    """An App Store rating is a finite number on Apple's 0 to 5 scale."""
+    number = _number(value)
+    return number if number is not None and 0 <= number <= 5 else None
 
 
 def _strings(value: object) -> list[str]:
@@ -57,7 +65,7 @@ def _unique_ids(value: object, accept: Callable[[object], bool] = lambda item: i
 def _ranks(value: object) -> dict[str, int]:
     if not isinstance(value, dict):
         return {}
-    return {category: rank for category, rank in value.items() if _integer(rank) is not None}
+    return {category: chart_rank(rank) for category, rank in value.items() if chart_rank(rank) is not None}
 
 
 def _with(value: Record, **fields: Any) -> Record:
@@ -99,12 +107,12 @@ def read_app(value: object) -> Record | None:
         name=name,
         category=_text(value.get('category')),
         categories=_strings(value.get('categories')),
-        chartRank=_integer(value.get('chartRank')),
+        chartRank=chart_rank(value.get('chartRank')),
         chartRanks=_ranks(value.get('chartRanks')),
         assetIds=_unique_ids(value.get('assetIds'), is_screenshot_id),
         iconPath=value.get('iconPath') if is_asset_path(value.get('iconPath')) else None,
         url=value.get('url') if is_apple_source_url(value.get('url')) else None,
-        rating=_finite(value.get('rating')),
+        rating=rating(value.get('rating')),
     )
 
 
