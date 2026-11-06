@@ -27,8 +27,9 @@ import {
  * @typedef {import('./snapshot.js').Snapshot} Snapshot
  * @typedef {import('./views.js').ScreenViewer} ScreenViewer
  * @typedef {import('./views.js').ReviewedKind} ReviewedKind
- * @typedef {App | Screenshot | Collection | UiElement} CatalogRecord
- * @typedef {{kind: ReviewedKind, record: Collection | UiElement}} BoardCollection
+ * @typedef {import('./views.js').ReviewedEntry} ReviewedEntry
+ * @typedef {{kind: 'app', record: App} | {kind: 'screenshot', record: Screenshot} | ReviewedEntry} CatalogEntry
+ * @typedef {{label: string, categories: string[], text: unknown[], rank?: (category: string) => number | undefined}} Facets
  */
 
 /**
@@ -162,69 +163,103 @@ const catalogCategories = current =>
     ),
   ].sort();
 
-/** @param {CatalogRecord} record */
-function searchableText(record) {
-  const parts = [record.id, record.category, 'name' in record ? record.name : record.title];
-  if ('categories' in record) parts.push(...record.categories);
-  if ('tags' in record) parts.push(record.appName, record.description, ...record.tags);
-  return parts.filter(Boolean).join(' ').toLowerCase();
+/**
+ * What filtering and sorting read from an entry. Each kind reads only its own validated fields,
+ * so extra fields a record carries from older data cannot change its behavior.
+ * @param {CatalogEntry} entry
+ * @returns {Facets}
+ */
+function facets(entry) {
+  switch (entry.kind) {
+    case 'app': {
+      const app = entry.record,
+        categories = categoriesForApp(app);
+      return {
+        label: app.name,
+        categories,
+        text: [app.id, app.name, ...categories],
+        rank: category => chartRankIn(app, category || app.category || ''),
+      };
+    }
+    case 'screenshot': {
+      const s = entry.record;
+      return { label: s.title ?? '', categories: s.category ? [s.category] : [], text: [s.id, s.title, s.category] };
+    }
+    default: {
+      const r = entry.record;
+      return {
+        label: r.title,
+        categories: r.category ? [r.category] : [],
+        text: [r.id, r.title, r.category, r.appName, r.description, ...r.tags],
+      };
+    }
+  }
 }
 
-/** @param {CatalogRecord} record */
-function matchesFilters(record) {
+/** @param {CatalogEntry} entry */
+function matchesFilters(entry) {
   const query = ui.search.value.toLowerCase().trim(),
-    category = ui.category.value;
-  const inCategory =
-    !category || ('categories' in record ? categoriesForApp(record).includes(category) : record.category === category);
-  return inCategory && (!query || searchableText(record).includes(query));
+    category = ui.category.value,
+    { categories, text } = facets(entry);
+  const searchable = text
+    .filter(part => typeof part === 'string' && part)
+    .join(' ')
+    .toLowerCase();
+  return (!category || categories.includes(category)) && (!query || searchable.includes(query));
 }
 
-/** @param {CatalogRecord} record */
-const displayName = record => ('name' in record ? record.name : (record.title ?? ''));
-
-/** @template {CatalogRecord} T @param {T[]} records @returns {T[]} */
-function filtered(records) {
-  const out = records.filter(matchesFilters);
-  if (ui.sort.value === 'name') return out.sort((a, b) => displayName(a).localeCompare(displayName(b)));
+/** @param {CatalogEntry[]} entries @returns {CatalogEntry[]} */
+function filtered(entries) {
+  const out = entries.filter(matchesFilters);
+  if (ui.sort.value === 'name') return out.sort((a, b) => facets(a).label.localeCompare(facets(b).label));
   if (snapshot?.coverage.rankBasis !== 'original-category-feed') return out;
   const category = ui.category.value;
-  /** @param {CatalogRecord} record */
-  const rank = record =>
-    ('chartRanks' in record ? chartRankIn(record, category || record.category || '') : undefined) ?? 999;
+  /** @param {CatalogEntry} entry */
+  const rank = entry => facets(entry).rank?.(category) ?? 999;
   return out.sort((a, b) => rank(a) - rank(b));
 }
 
-/** @param {Snapshot} current @param {Route} r @returns {CatalogRecord[]} */
-function routeRecords(current, r) {
+/** @param {Screenshot[]} screens @returns {CatalogEntry[]} */
+const screenshotEntries = screens => screens.map(record => ({ kind: /** @type {const} */ ('screenshot'), record }));
+/** @param {Snapshot} current @returns {ReviewedEntry[]} */
+const reviewedEntries = current => [
+  ...current.flows.map(record => ({ kind: /** @type {const} */ ('flows'), record })),
+  ...current.elements.map(record => ({ kind: /** @type {const} */ ('elements'), record })),
+];
+
+/** @param {Snapshot} current @param {Route} r @returns {CatalogEntry[]} */
+function routeEntries(current, r) {
   switch (r) {
     case 'apps':
-      return filtered(current.apps);
+      return filtered(current.apps.map(record => ({ kind: /** @type {const} */ ('app'), record })));
     case 'screens':
-      return filtered(current.screens.filter(s => !s.curatedOnly));
+      return filtered(screenshotEntries(current.screens.filter(s => !s.curatedOnly)));
     case 'boards':
-      return filtered(current.screens.filter(s => board.has('screen', s.id)));
+      return filtered(screenshotEntries(current.screens.filter(s => board.has('screen', s.id))));
     case 'flows':
-      return filtered(current.flows);
     case 'elements':
-      return filtered(current.elements);
+      return filtered(reviewedEntries(current).filter(entry => entry.kind === r));
     default:
       return [];
   }
 }
 
-/** @param {Snapshot} current @returns {BoardCollection[]} */
+/** @param {Snapshot} current @returns {ReviewedEntry[]} */
 const boardCollections = current =>
-  [
-    ...current.flows.map(record => ({ kind: /** @type {const} */ ('flows'), record })),
-    ...current.elements.map(record => ({ kind: /** @type {const} */ ('elements'), record })),
-  ].filter(({ kind, record }) => board.has('collection', `${kind}:${record.id}`) && matchesFilters(record));
+  reviewedEntries(current).filter(
+    entry => board.has('collection', `${entry.kind}:${entry.record.id}`) && matchesFilters(entry)
+  );
 
-/** @param {import('./views.js').ViewContext} ctx @param {CatalogRecord} record */
-function card(ctx, record) {
-  if ('name' in record) return appCard(ctx, record);
-  if ('assetIds' in record) return reviewedCard(ctx, record, 'flows');
-  if ('screenId' in record) return reviewedCard(ctx, record, 'elements');
-  return screenCard(ctx, record);
+/** @param {import('./views.js').ViewContext} ctx @param {CatalogEntry} entry */
+function card(ctx, entry) {
+  switch (entry.kind) {
+    case 'app':
+      return appCard(ctx, entry.record);
+    case 'screenshot':
+      return screenCard(ctx, entry.record);
+    default:
+      return reviewedCard(ctx, entry);
+  }
 }
 
 /** @param {Snapshot} current */
@@ -281,14 +316,14 @@ function render() {
   }
   ui.exportButton.disabled = false;
   const ctx = viewContext(current);
-  const records = routeRecords(current, r),
+  const records = routeEntries(current, r),
     collections = r === 'boards' ? boardCollections(current) : [];
   const where = r === 'boards' ? (board.remote ? ' · synced board' : ' · saved on this device') : '';
   ui.status.textContent = `${(records.length + collections.length).toLocaleString()} results${where}${board.warning ? ' · ' + board.warning : ''}`;
   ui.more.hidden = records.length <= limit;
   ui.content.className = isReviewedRoute(r) || collections.length ? 'grid curated-grid' : 'grid';
   const cards = [
-    ...collections.map(({ kind, record }) => reviewedCard(ctx, record, kind)),
+    ...collections.map(entry => reviewedCard(ctx, entry)),
     ...records.slice(0, limit).map(record => card(ctx, record)),
   ];
   ui.content.innerHTML = cards.length ? cards.join('') : `<div class="empty">${emptyState(r, ROUTES[r])}</div>`;
@@ -362,14 +397,15 @@ function openApp(app, focusScreenId = null) {
 /** @param {string} id @param {string | undefined} kind */
 function viewReviewed(id, kind) {
   if (!snapshot || (kind !== 'flows' && kind !== 'elements')) return;
-  const record = kind === 'flows' ? snapshot.flows.find(x => x.id === id) : snapshot.elements.find(x => x.id === id);
-  if (!record) return;
+  const entry = reviewedEntries(snapshot).find(item => item.kind === kind && item.record.id === id);
+  if (!entry) return;
+  const { record } = entry;
   openScreens({
-    screenshots: screenshotsFor(viewContext(snapshot), reviewedScreenshotIds(record)),
+    screenshots: screenshotsFor(viewContext(snapshot), reviewedScreenshotIds(entry)),
     index: 0,
     title: record.title,
     context:
-      kind === 'flows'
+      entry.kind === 'flows'
         ? "Listing collection · interaction order unverified. Shown in the curator's order."
         : `${record.description || 'Reviewed interface pattern'} · Reviewed ${record.reviewedAt || 'date unavailable'}`,
     returnAppId: null,
@@ -549,7 +585,7 @@ ui.exportButton.addEventListener('click', () => {
       exportedAt: new Date().toISOString(),
       coverage: snapshot.coverage,
       route: r,
-      records: routeRecords(snapshot, r),
+      records: routeEntries(snapshot, r).map(entry => entry.record),
       ...(collections ? { collections } : {}),
     },
     `hugging-app-${r}.json`
