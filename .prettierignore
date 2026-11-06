@@ -1,0 +1,7 @@
+site/
+worker/
+pipeline/
+firestore.rules
+package-lock.json
+PLAN.md
+STATUS.md

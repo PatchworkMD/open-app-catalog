@@ -1,82 +1,134 @@
-// Run with the in-memory local preview route: node tests/site.test.cjs
-const {chromium} = require('playwright');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
-const {catalogBase} = require('./browser-fixture.cjs');
-(async () => {
-  const browser = await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
-  const page = await browser.newPage({viewport:{width:1440,height:1000}});
-  const errors = []; page.on('pageerror', e => errors.push(e.message));
+const { catalogBase, launchBrowser, evidencePath, fitsViewport } = require('./browser-fixture.cjs');
+
+let browser;
+before(async () => {
+  browser = await launchBrowser();
+});
+after(() => browser?.close());
+
+async function openCatalog(hash, options = { viewport: { width: 1440, height: 1000 } }) {
+  const page = await browser.newPage(options);
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
   const base = await catalogBase(page);
-  const evidence = await fs.mkdtemp(path.join(os.tmpdir(),'hugging-app-qa-'));
-  try {
-    await page.goto(base + '#apps');
-    await page.locator('.app-open').first().waitFor();
-    assert.equal(await page.locator('.app-open').count(),48);
-    await page.locator('.app-open').first().press('Enter');
-    assert.equal(await page.locator('#viewer').evaluate(el => el.open),true);
-    await page.keyboard.press('Escape');
-    await page.evaluate(() => window.scrollTo(0,0));
-    await page.screenshot({path:path.join(evidence,'desktop.png')});
-    await page.getByRole('link',{name:'Screens',exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('#title').textContent === 'Screens');
-    await page.locator('#content [data-save]').first().click();
-    await page.locator('#content [data-select]').nth(0).click();
-    await page.locator('#content [data-select]').nth(1).click();
-    await page.locator('#compare').click();
-    assert.equal(await page.locator('.comparegrid .pin').count(),2);
-    await page.locator('#viewer [data-save]').first().click();
-    assert.equal(await page.locator('#content [data-save]').first().getAttribute('aria-pressed'),'false');
-    await page.keyboard.press('Escape');
-    await page.locator('#content [data-save]').first().click();
-    await page.getByRole('link',{name:'Saved board',exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('#title').textContent === 'Saved board');
-    assert.equal(await page.locator('#content .pin').count(),1);
-    const [download] = await Promise.all([page.waitForEvent('download'),page.locator('#export').click()]);
-    const exported = JSON.parse(await fs.readFile(await download.path(),'utf8'));
-    assert.equal(exported.records.length,1); assert.equal(exported.route,'boards');
-    await page.reload(); await page.locator('#content .pin').waitFor();
-    await page.locator('#content [data-save]').click();
-    await page.getByText('Your board is empty.',{exact:true}).waitFor();
-    await page.goto(base + '#screens');
-    await page.locator('#search').fill('zzzz-no-such-app-zzzz');
-    await page.getByText('No matching results',{exact:true}).waitFor();
-    await page.getByRole('button',{name:'Clear filters'}).click();
-    assert.equal(await page.locator('#content .pin').count(),48);
-    await page.locator('#category').selectOption('Education');
-    assert((await page.locator('#content .pinmeta').allTextContents()).every(x => x==='Education'));
-    for (const route of ['flows','elements','agents','plugin','unknown']) {
+  if (hash !== null) await page.goto(base + hash);
+  return { page, base, errors };
+}
+
+const readExport = async download => JSON.parse(await fs.readFile(await download.path(), 'utf8'));
+const waitForSnapshot = page =>
+  page.waitForFunction(() => document.querySelector('#coverage').textContent.includes('Snapshot'));
+
+test('an app card opens its viewer from the keyboard', async () => {
+  const { page, errors } = await openCatalog('#apps');
+  await page.locator('.app-open').first().waitFor();
+  assert.equal(await page.locator('.app-open').count(), 48);
+  await page.locator('.app-open').first().press('Enter');
+  assert.equal(await page.getByRole('dialog').isVisible(), true);
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: await evidencePath('desktop.png') });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('comparison and board stay in sync, persist and export', async () => {
+  const { page, errors } = await openCatalog('#screens');
+  const save = page.locator('#content [data-save]');
+  await save.first().waitFor();
+  await save.first().click();
+  await page.locator('#content [data-select]').nth(0).click();
+  await page.locator('#content [data-select]').nth(1).click();
+  await page.getByRole('button', { name: /^Compare \d+$/ }).click();
+  assert.equal(await page.locator('.comparegrid .pin').count(), 2);
+  await page.locator('#viewer [data-save]').first().click();
+  assert.equal(await save.first().getAttribute('aria-pressed'), 'false');
+  await page.keyboard.press('Escape');
+  await save.first().click();
+  await page.getByRole('link', { name: 'Saved board', exact: true }).click();
+  await page.getByRole('heading', { name: 'Saved board', level: 1 }).waitFor();
+  assert.equal(await page.locator('#content .pin').count(), 1);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export data' }).click(),
+  ]);
+  const exported = await readExport(download);
+  assert.equal(exported.records.length, 1);
+  assert.equal(exported.route, 'boards');
+  await page.reload();
+  await page.locator('#content .pin').waitFor();
+  await page.locator('#content [data-save]').click();
+  await page.getByText('Your board is empty.', { exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('search and category filters narrow results and clear back to the first page', async () => {
+  const { page, errors } = await openCatalog('#screens');
+  await page.locator('#content .pin').first().waitFor();
+  await page.getByRole('searchbox', { name: 'Search catalog' }).fill('zzzz-no-such-app-zzzz');
+  await page.getByText('No matching results', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  assert.equal(await page.locator('#content .pin').count(), 48);
+  const category = page.getByRole('combobox', { name: 'Category' });
+  const firstCategory = await category.locator('option').nth(1).textContent();
+  await category.selectOption(firstCategory);
+  const labels = await page.locator('#content .pinmeta').allTextContents();
+  assert(labels.length > 0);
+  assert(labels.every(label => label === firstCategory));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('informational routes hide export and unknown routes fall back to Apps', async () => {
+  const { page, base, errors } = await openCatalog(null);
+  for (const route of ['flows', 'elements', 'agents', 'plugin', 'unknown']) {
+    await page.goto(base + '#' + route);
+    await waitForSnapshot(page);
+    if (['agents', 'plugin'].includes(route))
+      assert.equal(await page.getByRole('button', { name: 'Export data' }).isVisible(), false);
+    if (route === 'unknown') assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'Apps');
+  }
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('every main route fits 390px and 320px without horizontal scroll', async () => {
+  const { page, base, errors } = await openCatalog(null);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const route of ['apps', 'screens', 'elements', 'flows', 'boards', 'agents', 'plugin']) {
       await page.goto(base + '#' + route);
-      await page.waitForFunction(() => document.querySelector('#coverage').textContent.includes('Snapshot'));
-      if (['agents','plugin'].includes(route)) assert.equal(await page.locator('#export').isVisible(),false);
-      if (route==='unknown') assert.equal(await page.locator('#title').textContent(),'Apps');
+      await waitForSnapshot(page);
+      if (['elements', 'flows'].includes(route)) await page.locator('.collection-card').first().waitFor();
+      await page.screenshot({ path: await evidencePath(`${route}-${width}.png`), animations: 'disabled' });
+      assert(await fitsViewport(page), `${route} overflows at ${width}px`);
     }
-    for (const width of [390,320]) {
-      await page.setViewportSize({width,height:844});
-      for (const route of ['apps','screens','elements','flows','boards','agents','plugin']) {
-        await page.goto(base + '#' + route);
-        await page.waitForFunction(() => document.querySelector('#coverage').textContent.includes('Snapshot'));
-        if (['elements','flows'].includes(route)) await page.locator('.collection-card').first().waitFor();
-        await page.screenshot({path:path.join(evidence,`${route}-${width}.png`),animations:'disabled'});
-        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} overflows at ${width}px`);
-      }
-    }
-    const blocked = await browser.newPage();
-    await catalogBase(blocked);
-    await blocked.route('**/data.json',route => route.fulfill({status:503}));
-    await blocked.goto(base); await blocked.getByRole('button',{name:'Try again'}).waitFor();
-    assert.equal(await blocked.locator('#export').isEnabled(),false);
-    await blocked.close();
-    const storage = await browser.newPage();
-    await catalogBase(storage);
-    await storage.addInitScript(() => { Storage.prototype.setItem = () => {throw new Error('denied')}; });
-    await storage.goto(base + '#screens'); await storage.locator('[data-save]').first().click();
-    assert.match(await storage.locator('#status').textContent(),/Storage unavailable/);
-    await storage.close();
-    assert.deepEqual(errors,[]);
-    console.log('PASS: keyboard, comparison sync, board persistence/export, filters, routes, mobile, load failure, storage failure');
-    console.log('Screenshots: ' + evidence);
-  } finally { await browser.close(); }
-})().catch(e => { console.error(e); process.exitCode=1; });
+  }
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a failed snapshot load offers a retry and keeps export disabled', async () => {
+  const { page, base } = await openCatalog(null);
+  await page.route('**/data.json', route => route.fulfill({ status: 503 }));
+  await page.goto(base);
+  await page.getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Export data' }).isEnabled(), false);
+  await page.close();
+});
+
+test('denied storage keeps the board for the session and says so', async () => {
+  const { page, base } = await openCatalog(null);
+  await page.addInitScript(() => {
+    Storage.prototype.setItem = () => {
+      throw new Error('denied');
+    };
+  });
+  await page.goto(base + '#screens');
+  await page.locator('#content [data-save]').first().click();
+  assert.match(await page.getByRole('status').first().textContent(), /Storage unavailable/);
+  await page.close();
+});

@@ -1,88 +1,104 @@
-const {chromium} = require('playwright');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const {catalogBase} = require('./browser-fixture.cjs');
+const { catalogBase, launchBrowser, evidencePath } = require('./browser-fixture.cjs');
 const reviewedCuration = require('../site/curation.json');
 
-(async () => {
-  const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
+let browser;
+before(async () => {
+  browser = await launchBrowser();
+});
+after(() => browser?.close());
+
+test('collections and UI elements open, save to the board, search and export', async () => {
   const page = await browser.newPage();
   const base = await catalogBase(page);
-  if (process.env.CATALOG_SNAPSHOT) await page.route('**/data.json', route => route.fulfill({contentType:'application/json',body:require('node:fs').readFileSync(process.env.CATALOG_SNAPSHOT,'utf8')}));
-  try {
-    await page.goto(base + '#flows');
-    await page.locator('.collection-card').first().waitFor();
-    assert.equal(await page.locator('.collection-card').count(), 7);
-    const flowTitle = await page.locator('.collection-card').first().locator('.pincaption').textContent();
-    await page.locator('.collection-card').first().locator('[data-save-collection]').click();
-    assert.equal(await page.locator('.collection-card').first().locator('[data-save-collection]').getAttribute('aria-pressed'), 'true');
-    await page.locator('.collection-card').first().getByRole('button', {name:/Open/}).click();
-    assert.match(await page.locator('#viewerContent').textContent(), /Listing collection · interaction order unverified/);
-    assert.equal(await page.locator('.screen-thumbnails button').count(), 4);
-    const title = await page.locator('#viewerTitle').textContent();
-    await page.keyboard.press('ArrowRight');
-    assert.equal(await page.locator('#viewerTitle').textContent(), title);
-    assert.match(await page.locator('.screen-context').textContent(), /interaction order unverified/);
-    await page.locator('#viewerContent [data-save]').first().click();
-    assert.equal(await page.locator('#viewerContent [data-save]').first().getAttribute('aria-pressed'), 'true');
-    await page.keyboard.press('Escape');
-    await page.locator('#viewer').waitFor({state:'hidden'});
-    await page.getByRole('link', {name:'Saved board', exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('#title').textContent === 'Saved board');
-    const savedFlow = page.locator('.collection-card .pincaption').filter({hasText:flowTitle});
-    await savedFlow.waitFor();
-    assert.equal(await page.locator('.collection-card').count(), 1);
-    const [boardDownload] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
-    const boardExport = JSON.parse(require('node:fs').readFileSync(await boardDownload.path(), 'utf8'));
-    assert.equal(boardExport.records.length, 1);
-    assert.equal(boardExport.collections.length, 1);
-    assert.equal(boardExport.collections[0].kind, 'flows');
-    assert.equal(boardExport.collections[0].title, flowTitle);
-    assert.equal(boardExport.collections[0].assetIds.length, 4);
-    assert.match(boardExport.collections[0].sourceUrl, /^https:\/\/apps\.apple\.com\//);
-    await page.getByRole('link', {name:'Flows', exact:true}).click();
-    await page.getByRole('link', {name:'UI elements', exact:true}).click();
-    await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
-    assert.equal(await page.locator('.collection-card').count(), 25);
-    assert.equal(await page.locator('#viewer').isVisible(), false);
-    await page.screenshot({path:'/tmp/hugging-elements-fixed.png',animations:'disabled'});
-    await page.locator('.collection-card').first().getByRole('button', {name:/Open/}).click();
-    assert.equal(await page.locator('.screen-canvas img').count(), 1);
-    assert.match(await page.locator('.screen-context').textContent(), /Reviewed/);
-    await page.keyboard.press('Escape');
-    await page.locator('#viewer').waitFor({state:'hidden'});
-    assert.equal(await page.locator('#viewer').isVisible(), false);
-    await page.locator('#search').fill('tab bar');
-    assert((await page.locator('.collection-card').count()) > 0);
-    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
-    const exported = JSON.parse(require('node:fs').readFileSync(await download.path(), 'utf8'));
-    assert.equal(exported.route, 'elements');
-    assert.equal(exported.records[0].screenId.length, 64);
-    const malformed = await browser.newPage();
-    await catalogBase(malformed);
-    const malformedErrors = [];
-    malformed.on('pageerror', error => malformedErrors.push(error.message));
-    await malformed.route('**/curation.json', route => route.fulfill({contentType:'application/json',body:JSON.stringify({
-      screens:reviewedCuration.screens,
-      flows:[null,{id:'bad',title:'Bad',assetIds:{}},...reviewedCuration.flows],
-      elements:[null,...reviewedCuration.elements]
-    })}));
-    await malformed.goto(base + '#flows');
-    await malformed.locator('.collection-card').first().waitFor();
-    assert.equal(await malformed.locator('.collection-card').count(), reviewedCuration.flows.length);
-    assert.equal(await malformed.getByText('Bad',{exact:true}).count(),0);
-    assert.deepEqual(malformedErrors,[]);
-    await malformed.close();
-    const failed = await browser.newPage();
-    await catalogBase(failed);
-    await failed.route('**/curation.json', route => route.fulfill({status:503}));
-    await failed.goto(base + '#flows');
-    await failed.getByText('These references could not load.').waitFor();
-    assert.equal(await failed.locator('#export').isEnabled(), false);
-    await failed.unroute('**/curation.json');
-    await failed.getByRole('button',{name:'Try again'}).click();
-    await failed.locator('.collection-card').first().waitFor();
-    assert.equal(await failed.locator('.collection-card').count(),7);
-    await failed.close();
-    console.log('PASS: curation collections, ordered modal annotation, screen actions, saved flow metadata, search, export');
-  } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+  await page.goto(base + '#flows');
+  await page.locator('.collection-card').first().waitFor();
+  assert.equal(await page.locator('.collection-card').count(), 7);
+  const flowTitle = await page.locator('.collection-card').first().locator('.pincaption').textContent();
+  await page.locator('.collection-card').first().locator('[data-save-collection]').click();
+  assert.equal(
+    await page.locator('.collection-card').first().locator('[data-save-collection]').getAttribute('aria-pressed'),
+    'true'
+  );
+  await page.locator('.collection-card').first().getByRole('button', { name: /Open/ }).click();
+  assert.match(await page.locator('#viewerContent').textContent(), /Listing collection · interaction order unverified/);
+  assert.equal(await page.locator('.screen-thumbnails button').count(), 4);
+  const title = await page.locator('#viewerTitle').textContent();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#viewerTitle').textContent(), title);
+  assert.match(await page.locator('.screen-context').textContent(), /interaction order unverified/);
+  await page.locator('#viewerContent [data-save]').first().click();
+  assert.equal(await page.locator('#viewerContent [data-save]').first().getAttribute('aria-pressed'), 'true');
+  await page.keyboard.press('Escape');
+  await page.locator('#viewer').waitFor({ state: 'hidden' });
+  await page.getByRole('link', { name: 'Saved board', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#title').textContent === 'Saved board');
+  const savedFlow = page.locator('.collection-card .pincaption').filter({ hasText: flowTitle });
+  await savedFlow.waitFor();
+  assert.equal(await page.locator('.collection-card').count(), 1);
+  const [boardDownload] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
+  const boardExport = JSON.parse(require('node:fs').readFileSync(await boardDownload.path(), 'utf8'));
+  assert.equal(boardExport.records.length, 1);
+  assert.equal(boardExport.collections.length, 1);
+  assert.equal(boardExport.collections[0].kind, 'flows');
+  assert.equal(boardExport.collections[0].title, flowTitle);
+  assert.equal(boardExport.collections[0].assetIds.length, 4);
+  assert.match(boardExport.collections[0].sourceUrl, /^https:\/\/apps\.apple\.com\//);
+  await page.getByRole('link', { name: 'Flows', exact: true }).click();
+  await page.getByRole('link', { name: 'UI elements', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
+  assert.equal(await page.locator('.collection-card').count(), 25);
+  assert.equal(await page.locator('#viewer').isVisible(), false);
+  await page.screenshot({ path: await evidencePath('elements.png'), animations: 'disabled' });
+  await page.locator('.collection-card').first().getByRole('button', { name: /Open/ }).click();
+  assert.equal(await page.locator('.screen-canvas img').count(), 1);
+  assert.match(await page.locator('.screen-context').textContent(), /Reviewed/);
+  await page.keyboard.press('Escape');
+  await page.locator('#viewer').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#viewer').isVisible(), false);
+  await page.locator('#search').fill('tab bar');
+  assert((await page.locator('.collection-card').count()) > 0);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
+  const exported = JSON.parse(require('node:fs').readFileSync(await download.path(), 'utf8'));
+  assert.equal(exported.route, 'elements');
+  assert.equal(exported.records[0].screenId.length, 64);
+  await page.close();
+});
+
+test('malformed reviewed records are skipped without page errors', async () => {
+  const malformed = await browser.newPage();
+  const base = await catalogBase(malformed);
+  const malformedErrors = [];
+  malformed.on('pageerror', error => malformedErrors.push(error.message));
+  await malformed.route('**/curation.json', route =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        screens: reviewedCuration.screens,
+        flows: [null, { id: 'bad', title: 'Bad', assetIds: {} }, ...reviewedCuration.flows],
+        elements: [null, ...reviewedCuration.elements],
+      }),
+    })
+  );
+  await malformed.goto(base + '#flows');
+  await malformed.locator('.collection-card').first().waitFor();
+  assert.equal(await malformed.locator('.collection-card').count(), 7);
+  assert.equal(await malformed.getByText('Bad', { exact: true }).count(), 0);
+  assert.deepEqual(malformedErrors, []);
+  await malformed.close();
+});
+
+test('a failed reviewed library load offers a retry that recovers', async () => {
+  const failed = await browser.newPage();
+  const base = await catalogBase(failed);
+  await failed.route('**/curation.json', route => route.fulfill({ status: 503 }));
+  await failed.goto(base + '#flows');
+  await failed.getByText('These references could not load.').waitFor();
+  assert.equal(await failed.locator('#export').isEnabled(), false);
+  await failed.unroute('**/curation.json');
+  await failed.getByRole('button', { name: 'Try again' }).click();
+  await failed.locator('.collection-card').first().waitFor();
+  assert.equal(await failed.locator('.collection-card').count(), 7);
+  await failed.close();
+});
