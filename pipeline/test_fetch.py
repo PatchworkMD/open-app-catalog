@@ -126,6 +126,41 @@ class BuildTest(unittest.TestCase):
         shared = next(app for app in result["apps"] if app["id"] == "99")
         self.assertEqual(shared["chartRanks"], {"One": 100, "Two": 1})
 
+    def test_malformed_chart_feed_aborts_before_any_lookup(self):
+        for payload in ({}, {"feed": []}, {"feed": {"entry": "x"}}, ["feed"]):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as tmp, \
+                 patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
+                 patch.object(fetch, "ASSETS_DIR", Path(tmp)), \
+                 patch.object(fetch, "http_json", return_value=payload), \
+                 patch.object(fetch, "lookup_apps") as lookup:
+                with self.assertRaises(fetch.AppleFeedError):
+                    fetch.build()
+                lookup.assert_not_called()
+
+    def test_chart_entries_without_a_numeric_id_are_skipped(self):
+        entry = lambda app_id: {"id": {"attributes": {"im:id": app_id}}}
+        payload = {"feed": {"entry": [entry("123"), entry(456), entry("abc"), {"id": "x"}, None, entry("789")]}}
+        self.assertEqual(fetch.read_chart_ids(payload), ["123", "789"])
+        self.assertEqual(fetch.read_chart_ids({"feed": {"entry": entry("1")}}), ["1"])
+        self.assertEqual(fetch.read_chart_ids({"feed": {}}), [])
+
+    def test_lookup_results_keep_only_typed_fields_the_catalog_uses(self):
+        payload = {"results": [
+            {"trackId": 12, "trackName": "Kept", "screenshotUrls": ["https://a/1.png", "http://a/2.png", 3],
+             "trackViewUrl": "javascript:x", "averageUserRating": "4.5", "userRatingCount": True},
+            {"trackId": "x12", "trackName": "Bad id"},
+            {"trackId": 13, "trackName": ["Bad name"]},
+            None,
+        ]}
+        self.assertEqual(fetch.read_lookup_results(payload), [{
+            "trackId": "12", "trackName": "Kept", "trackViewUrl": None, "screenshotUrls": ["https://a/1.png"],
+            "artworkUrl512": None, "artworkUrl100": None, "artworkUrl60": None,
+            "averageUserRating": None, "userRatingCount": None,
+        }])
+        for payload in ({}, {"results": {}}, None):
+            with self.subTest(payload=payload), self.assertRaises(fetch.AppleFeedError):
+                fetch.read_lookup_results(payload)
+
     def test_empty_category_aborts_refresh(self):
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(fetch, "GENRES", {"one": ("One", 1)}), \
