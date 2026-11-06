@@ -14,7 +14,8 @@ Merge in this order. Each PR's base is the one before it. Nothing is merged or d
 4. [#14](https://github.com/PatchworkMD/open-app-catalog/pull/14): one `verify` command, pre-commit hook, fixture-backed browser tests.
 5. [#15](https://github.com/PatchworkMD/open-app-catalog/pull/15): shared Snapshot rules, Board module, accessibility fixes.
 6. [#16](https://github.com/PatchworkMD/open-app-catalog/pull/16): validated Snapshot intake, typed browser modules, publication policy, Apple response validation, product fixes, format and git guards.
-7. `push/20261106-quality-10-r3`: kind-safe browsing, shared rank and rating rules, strict refresh JSON, verified-only source links, accessible-name tests.
+7. [#17](https://github.com/PatchworkMD/open-app-catalog/pull/17): kind-safe browsing, shared rank and rating rules, strict refresh JSON, verified-only source links, accessible-name tests.
+8. `push/20261106-quality-10-r4`: oversized JSON integers are rejected at Snapshot and Apple intake instead of aborting.
 
 ## Gates for Austin
 
@@ -26,4 +27,6 @@ Product decisions (each blocks one withheld quality point; no agent may decide t
 
 Release handoff:
 
-- Review and merge the stack in order (#11 → #17), then watch the first Update catalog run.
+- GitHub Actions jobs currently do not start on PatchworkMD repos (account billing). CI evidence for #13 onward needs that resolved; local `npm run verify` is the evidence until then.
+
+- Review and merge the stack in order (#11 → #18), then watch the first Update catalog run.
