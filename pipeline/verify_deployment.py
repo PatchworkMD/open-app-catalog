@@ -3,7 +3,7 @@ import re
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from snapshot_rules import is_asset_path
+from snapshot import is_asset_path
 
 WORKER_BASE = 'https://open-app-catalog.austinwise-ev1e.workers.dev/'
 PUBLIC_BASE = 'https://catalog.patchworkmd.dev/'

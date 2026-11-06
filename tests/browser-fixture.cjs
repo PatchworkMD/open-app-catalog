@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
@@ -77,6 +78,96 @@ function fixtureSnapshot() {
   };
 }
 
+const appScreenshot = (n, s) => hash(`Fixture App ${String(n).padStart(2, '0')} screenshot ${s}`);
+const appUrl = n => `https://apps.apple.com/us/app/fixture-app-${n}/id${9000000 + n}`;
+
+// Three collections and four UI elements; two pinned screenshots exist only in the reviewed library.
+function fixtureReviewedLibrary() {
+  const pinned = [1, 2].map(n => {
+    const id = hash(`Reviewed pinned screenshot ${n}`);
+    return {
+      id,
+      path: `assets/${id}.png`,
+      kind: 'image',
+      category: 'Education',
+      title: 'Fixture App 01',
+      sourceUrl: appUrl(1),
+      reviewedAt: '2026-10-01',
+      curatedOnly: true,
+    };
+  });
+  const reviewed = (category, appName, n) => ({ category, appName, sourceUrl: appUrl(n), reviewedAt: '2026-10-01' });
+  return {
+    schemaVersion: 1,
+    screens: pinned,
+    flows: [
+      {
+        id: 'community',
+        title: 'Community and discovery',
+        description: 'Feed, profile and search screenshots.',
+        assetIds: [appScreenshot(41, 0), appScreenshot(41, 1), appScreenshot(41, 2)],
+        tags: ['feed'],
+        ...reviewed('Social Networking', 'Fixture App 41', 41),
+      },
+      {
+        id: 'welcome',
+        title: 'Onboarding welcome',
+        description: 'Welcome screenshots with pinned reviewed images.',
+        assetIds: [appScreenshot(1, 0), pinned[0].id, pinned[1].id],
+        tags: ['onboarding'],
+        ...reviewed('Education', 'Fixture App 01', 1),
+      },
+      {
+        id: 'planner',
+        title: 'Study planner',
+        description: 'Planner overview and detail.',
+        assetIds: [appScreenshot(21, 0), appScreenshot(21, 1)],
+        tags: ['planning'],
+        ...reviewed('Productivity', 'Fixture App 21', 21),
+      },
+    ],
+    elements: [
+      {
+        id: 'tab-bar',
+        title: 'Tab bar',
+        description: 'Bottom navigation with four tabs.',
+        screenId: appScreenshot(1, 1),
+        tags: ['navigation'],
+        ...reviewed('Education', 'Fixture App 01', 1),
+      },
+      {
+        id: 'search-field',
+        title: 'Search field',
+        description: 'Search with recent queries.',
+        screenId: appScreenshot(2, 0),
+        tags: ['search'],
+        ...reviewed('Education', 'Fixture App 02', 2),
+      },
+      {
+        id: 'progress-ring',
+        title: 'Progress ring',
+        description: 'Daily goal progress.',
+        screenId: pinned[0].id,
+        tags: ['progress'],
+        ...reviewed('Education', 'Fixture App 01', 1),
+      },
+      {
+        id: 'empty-state',
+        title: 'Empty state',
+        description: 'Empty planner with a first action.',
+        screenId: appScreenshot(21, 2),
+        tags: ['empty'],
+        ...reviewed('Productivity', 'Fixture App 21', 21),
+      },
+    ],
+  };
+}
+
+async function reviewedLibraryBody() {
+  if (process.env.CATALOG_SNAPSHOT === 'live') return fs.readFile(path.join(siteRoot, 'curation.json'));
+  return Buffer.from(JSON.stringify(fixtureReviewedLibrary()));
+}
+
 async function snapshotBody() {
   const source = process.env.CATALOG_SNAPSHOT;
   if (source === 'live') return fs.readFile(path.join(siteRoot, 'data.json'));
@@ -91,12 +182,15 @@ async function catalogBase(page) {
   await page.route(`${localOrigin}/**`, async route => {
     try {
       const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-      const relative = pathname === '/' ? '/index.html' : pathname;
+      const relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
       if (/^\/assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(relative)) {
         return route.fulfill({ status: 200, body: previewFixture, contentType: 'image/svg+xml' });
       }
       if (relative === '/data.json') {
         return route.fulfill({ status: 200, body: await snapshotBody(), contentType: mimeTypes['.json'] });
+      }
+      if (relative === '/curation.json') {
+        return route.fulfill({ status: 200, body: await reviewedLibraryBody(), contentType: mimeTypes['.json'] });
       }
       const file = path.resolve(siteRoot, `.${relative}`);
       if (file !== siteRoot && !file.startsWith(`${siteRoot}${path.sep}`)) {
@@ -115,8 +209,17 @@ async function catalogBase(page) {
   return `${localOrigin}/`;
 }
 
+const browserLibs = path.resolve(__dirname, '../.cache/browser-libs/root');
+
 function launchBrowser() {
-  return chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' });
+  const options = { headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' };
+  if (!fsSync.existsSync(browserLibs)) return chromium.launch(options);
+  const libraryPath = ['usr/lib/x86_64-linux-gnu', 'lib/x86_64-linux-gnu'].map(dir => path.join(browserLibs, dir));
+  const inherited = process.env.LD_LIBRARY_PATH ? [process.env.LD_LIBRARY_PATH] : [];
+  return chromium.launch({
+    ...options,
+    env: { ...process.env, LD_LIBRARY_PATH: [...libraryPath, ...inherited].join(':') },
+  });
 }
 
 async function evidencePath(name) {
@@ -127,4 +230,4 @@ async function evidencePath(name) {
 
 const fitsViewport = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
-module.exports = { catalogBase, launchBrowser, evidencePath, fitsViewport, fixtureSnapshot };
+module.exports = { catalogBase, launchBrowser, evidencePath, fitsViewport, fixtureSnapshot, fixtureReviewedLibrary };

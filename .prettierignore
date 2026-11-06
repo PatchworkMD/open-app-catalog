@@ -1,7 +1,13 @@
-site/
-worker/
-pipeline/
-firestore.rules
+# Generated or fetched data; formatting would churn every catalog refresh.
+site/data.json
+site/curation.json
+site/image-sources.json
+site/apps/
+site/ui-elements/
+site/flows/
+site/about/
+site/sitemap.xml
+site/robots.txt
+site/llms.txt
 package-lock.json
-PLAN.md
-STATUS.md
+.cache/

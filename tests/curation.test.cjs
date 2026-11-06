@@ -1,7 +1,6 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { catalogBase, launchBrowser, evidencePath } = require('./browser-fixture.cjs');
-const reviewedCuration = require('../site/curation.json');
+const { catalogBase, launchBrowser, evidencePath, fixtureReviewedLibrary } = require('./browser-fixture.cjs');
 
 let browser;
 before(async () => {
@@ -14,7 +13,7 @@ test('collections and UI elements open, save to the board, search and export', a
   const base = await catalogBase(page);
   await page.goto(base + '#flows');
   await page.locator('.collection-card').first().waitFor();
-  assert.equal(await page.locator('.collection-card').count(), 7);
+  assert.equal(await page.locator('.collection-card').count(), 3);
   const flowTitle = await page.locator('.collection-card').first().locator('.pincaption').textContent();
   await page.locator('.collection-card').first().locator('[data-save-collection]').click();
   assert.equal(
@@ -23,7 +22,7 @@ test('collections and UI elements open, save to the board, search and export', a
   );
   await page.locator('.collection-card').first().getByRole('button', { name: /Open/ }).click();
   assert.match(await page.locator('#viewerContent').textContent(), /Listing collection · interaction order unverified/);
-  assert.equal(await page.locator('.screen-thumbnails button').count(), 4);
+  assert.equal(await page.locator('.screen-thumbnails button').count(), 3);
   const title = await page.locator('#viewerTitle').textContent();
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.locator('#viewerTitle').textContent(), title);
@@ -43,12 +42,12 @@ test('collections and UI elements open, save to the board, search and export', a
   assert.equal(boardExport.collections.length, 1);
   assert.equal(boardExport.collections[0].kind, 'flows');
   assert.equal(boardExport.collections[0].title, flowTitle);
-  assert.equal(boardExport.collections[0].assetIds.length, 4);
+  assert.equal(boardExport.collections[0].assetIds.length, 3);
   assert.match(boardExport.collections[0].sourceUrl, /^https:\/\/apps\.apple\.com\//);
   await page.getByRole('link', { name: 'Flows', exact: true }).click();
   await page.getByRole('link', { name: 'UI elements', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#title').textContent === 'UI elements');
-  assert.equal(await page.locator('.collection-card').count(), 25);
+  assert.equal(await page.locator('.collection-card').count(), 4);
   assert.equal(await page.locator('#viewer').isVisible(), false);
   await page.screenshot({ path: await evidencePath('elements.png'), animations: 'disabled' });
   await page.locator('.collection-card').first().getByRole('button', { name: /Open/ }).click();
@@ -57,8 +56,8 @@ test('collections and UI elements open, save to the board, search and export', a
   await page.keyboard.press('Escape');
   await page.locator('#viewer').waitFor({ state: 'hidden' });
   assert.equal(await page.locator('#viewer').isVisible(), false);
-  await page.locator('#search').fill('tab bar');
-  assert((await page.locator('.collection-card').count()) > 0);
+  await page.getByRole('searchbox', { name: 'Search catalog' }).fill('tab bar');
+  assert.deepEqual(await page.locator('.collection-card .pincaption').allTextContents(), ['Tab bar']);
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
   const exported = JSON.parse(require('node:fs').readFileSync(await download.path(), 'utf8'));
   assert.equal(exported.route, 'elements');
@@ -67,6 +66,7 @@ test('collections and UI elements open, save to the board, search and export', a
 });
 
 test('malformed reviewed records are skipped without page errors', async () => {
+  const reviewedLibrary = fixtureReviewedLibrary();
   const malformed = await browser.newPage();
   const base = await catalogBase(malformed);
   const malformedErrors = [];
@@ -75,16 +75,35 @@ test('malformed reviewed records are skipped without page errors', async () => {
     route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        screens: reviewedCuration.screens,
-        flows: [null, { id: 'bad', title: 'Bad', assetIds: {} }, ...reviewedCuration.flows],
-        elements: [null, ...reviewedCuration.elements],
+        screens: [
+          { ...reviewedLibrary.screens[0], path: [reviewedLibrary.screens[0].path] },
+          reviewedLibrary.screens[1],
+        ],
+        flows: [
+          null,
+          { id: 'bad', title: 'Bad', assetIds: {} },
+          { id: 'numeric', title: 7, assetIds: [] },
+          ...reviewedLibrary.flows,
+        ],
+        elements: [null, { id: 'orphan', title: 'Orphan', screenId: 'f'.repeat(64) }, ...reviewedLibrary.elements],
       }),
     })
   );
   await malformed.goto(base + '#flows');
   await malformed.locator('.collection-card').first().waitFor();
-  assert.equal(await malformed.locator('.collection-card').count(), 7);
-  assert.equal(await malformed.getByText('Bad', { exact: true }).count(), 0);
+  assert.deepEqual(await malformed.locator('.collection-card .pincaption').allTextContents(), [
+    'Community and discovery',
+    'Onboarding welcome',
+    'Study planner',
+  ]);
+  assert.match(await malformed.locator('.collection-card').nth(1).locator('.pinmeta').textContent(), /2 screenshots/);
+  await malformed.getByRole('link', { name: 'UI elements', exact: true }).click();
+  await malformed.getByRole('heading', { name: 'UI elements', level: 1 }).waitFor();
+  assert.deepEqual(await malformed.locator('.collection-card .pincaption').allTextContents(), [
+    'Tab bar',
+    'Search field',
+    'Empty state',
+  ]);
   assert.deepEqual(malformedErrors, []);
   await malformed.close();
 });
@@ -99,6 +118,6 @@ test('a failed reviewed library load offers a retry that recovers', async () => 
   await failed.unroute('**/curation.json');
   await failed.getByRole('button', { name: 'Try again' }).click();
   await failed.locator('.collection-card').first().waitFor();
-  assert.equal(await failed.locator('.collection-card').count(), 7);
+  assert.equal(await failed.locator('.collection-card').count(), 3);
   await failed.close();
 });

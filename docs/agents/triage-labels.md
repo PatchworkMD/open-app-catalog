@@ -12,4 +12,6 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+## Labels that exist today
+
+Only `wontfix` exists on `PatchworkMD/open-app-catalog`. The other four are an open gate for Austin (see STATUS.md). Until they exist, do not create labels yourself: record the intended role in a comment on the item instead.

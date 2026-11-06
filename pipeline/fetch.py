@@ -51,7 +51,7 @@ GENRES = {
 }
 
 
-def http_json(url: str, retries: int = 3) -> dict:
+def http_json(url: str, retries: int = 3) -> object:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     for attempt in range(retries):
         try:
@@ -77,19 +77,69 @@ def http_bytes(url: str, retries: int = 3) -> bytes:
     raise RuntimeError("unreachable")
 
 
+class AppleFeedError(RuntimeError):
+    """An Apple response did not have the shape the catalog relies on."""
+
+
+def _https(value: object) -> str | None:
+    return value if isinstance(value, str) and value.startswith("https://") else None
+
+
+def read_chart_ids(payload: object) -> list[str]:
+    """Numeric app ids from an RSS top-chart response. Entries without one are skipped."""
+    feed = payload.get("feed") if isinstance(payload, dict) else None
+    if not isinstance(feed, dict):
+        raise AppleFeedError("Chart response has no feed object")
+    entries = feed.get("entry", [])
+    entries = [entries] if isinstance(entries, dict) else entries
+    if not isinstance(entries, list):
+        raise AppleFeedError("Chart feed entries are not a list")
+    ids = []
+    for entry in entries:
+        app_id = entry.get("id", {}).get("attributes", {}).get("im:id") if isinstance(entry, dict) and isinstance(entry.get("id"), dict) and isinstance(entry["id"].get("attributes"), dict) else None
+        if isinstance(app_id, str) and app_id.isdecimal():
+            ids.append(app_id)
+    return ids
+
+
+def read_lookup_result(result: object) -> dict | None:
+    """The Lookup API fields the catalog uses, typed; None when the listing has no id or name."""
+    if not isinstance(result, dict):
+        return None
+    track_id = result.get("trackId")
+    track_id = str(track_id) if isinstance(track_id, int) and not isinstance(track_id, bool) else track_id
+    name = result.get("trackName")
+    if not isinstance(track_id, str) or not track_id.isdecimal() or not isinstance(name, str) or not name.strip():
+        return None
+    rating = result.get("averageUserRating")
+    count = result.get("userRatingCount")
+    screenshots = result.get("screenshotUrls")
+    return {
+        "trackId": track_id,
+        "trackName": name,
+        "trackViewUrl": _https(result.get("trackViewUrl")),
+        "screenshotUrls": [url for url in screenshots if _https(url)] if isinstance(screenshots, list) else [],
+        "artworkUrl512": _https(result.get("artworkUrl512")),
+        "artworkUrl100": _https(result.get("artworkUrl100")),
+        "artworkUrl60": _https(result.get("artworkUrl60")),
+        "averageUserRating": rating if isinstance(rating, (int, float)) and not isinstance(rating, bool) else None,
+        "userRatingCount": count if isinstance(count, int) and not isinstance(count, bool) else None,
+    }
+
+
+def read_lookup_results(payload: object) -> list[dict]:
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list):
+        raise AppleFeedError("Lookup response has no results list")
+    return [app for app in map(read_lookup_result, results) if app]
+
+
 def fetch_chart_ids(genre_id: str) -> list[str]:
     url = (
         f"https://itunes.apple.com/{STORE}/rss/topfreeapplications/"
         f"limit={CHART_LIMIT}/genre={genre_id}/json"
     )
-    payload = http_json(url)
-    entries = payload.get("feed", {}).get("entry", [])
-    ids = []
-    for entry in entries:
-        app_id = entry.get("id", {}).get("attributes", {}).get("im:id")
-        if app_id:
-            ids.append(app_id)
-    return ids
+    return read_chart_ids(http_json(url))
 
 
 def lookup_apps(app_ids: list[str]) -> list[dict]:
@@ -97,8 +147,7 @@ def lookup_apps(app_ids: list[str]) -> list[dict]:
     for i in range(0, len(app_ids), 150):
         chunk = app_ids[i : i + 150]
         url = f"https://itunes.apple.com/lookup?id={','.join(chunk)}&country={STORE}"
-        payload = http_json(url)
-        results.extend(payload.get("results", []))
+        results.extend(read_lookup_results(http_json(url)))
         time.sleep(1)
     return results
 
@@ -160,8 +209,8 @@ def build() -> dict:
         if chart_ids and not details:
             raise RuntimeError(f"No app metadata for {label}; preserving previous catalog")
         for d in details:
-            app_id = str(d.get("trackId", ""))
-            if not app_id or app_id not in rank_by_id or app_id in apps_by_id:
+            app_id = d["trackId"]
+            if app_id not in rank_by_id or app_id in apps_by_id:
                 continue
             app_chart_ranks = chart_memberships[app_id]
             category = next(iter(app_chart_ranks))
@@ -175,7 +224,7 @@ def build() -> dict:
                 screens.append(
                     {
                         "id": saved["id"],
-                        "title": d.get("trackName", "Screen reference"),
+                        "title": d["trackName"],
                         "category": category,
                         "kind": "image",
                         "path": saved["path"],
@@ -187,7 +236,7 @@ def build() -> dict:
             saved_icon = save_image(icon_url) if icon_url else None
             app = {
                 "id": app_id,
-                "name": d.get("trackName", "Unknown"),
+                "name": d["trackName"],
                 "nameBasis": "App Store Lookup API",
                 "url": d.get("trackViewUrl"),
                 "category": category,

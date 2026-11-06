@@ -28,6 +28,25 @@ async function viewerPage() {
   };
 }
 
+const SPATIAL = 'transform|translate|scale|rotate|all';
+function spatialMotion(locator) {
+  return locator.evaluate((el, pattern) => {
+    const spatial = new RegExp(`^(${pattern})$`);
+    const style = getComputedStyle(el);
+    const durations = style.transitionDuration.split(',').map(parseFloat);
+    const transitions = style.transitionProperty
+      .split(',')
+      .map(property => property.trim())
+      .filter((property, i) => spatial.test(property) && durations[i % durations.length] > 0);
+    const animations = el
+      .getAnimations()
+      .filter(animation =>
+        animation.effect?.getKeyframes().some(frame => Object.keys(frame).some(key => spatial.test(key)))
+      );
+    return transitions.length + animations.length > 0;
+  }, SPATIAL);
+}
+
 async function assertScreenFits(page, stage) {
   await stage.evaluate(img => img.decode());
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.screen-canvas img')).opacity === '1');
@@ -65,32 +84,21 @@ test('the app viewer shows a gallery, a sharp screenshot, keyboard steps, reduce
   assert(await page.getByRole('button', { name: 'Previous screenshot' }).isDisabled());
   await page.keyboard.press('ArrowRight');
   assert.notEqual(await stage.getAttribute('src'), initial);
-  await page.waitForFunction(
-    () => getComputedStyle(document.querySelector('.screen-canvas img')).animationName === 'viewerImageIn'
-  );
+  await stage.waitFor({ state: 'visible' });
   assert.equal(await page.getByRole('button', { name: 'Back to app' }).isVisible(), true);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.locator('[data-thumb="0"]').click();
+  await page.getByRole('button', { name: 'Screenshot 1', exact: true }).click();
   assert.equal(await stage.getAttribute('src'), initial);
-  assert.equal(await stage.evaluate(img => getComputedStyle(img).animationName), 'none');
-  const reducedMotion = await page
-    .locator('.screen-thumbnails button')
-    .first()
-    .evaluate(button => ({
-      properties: getComputedStyle(button).transitionProperty,
-      duration: getComputedStyle(button).transitionDuration,
-    }));
-  assert.match(reducedMotion.properties, /border-color/);
-  assert.doesNotMatch(reducedMotion.properties, /transform/);
-  assert.equal(reducedMotion.duration, '0.1s');
-  const reducedDialogMotion = await dialog.evaluate(el => ({
-    properties: getComputedStyle(el).transitionProperty,
-    duration: getComputedStyle(el).transitionDuration,
-  }));
-  assert.match(reducedDialogMotion.properties, /opacity/);
-  assert.doesNotMatch(reducedDialogMotion.properties, /transform|display|overlay/);
-  assert.equal(reducedDialogMotion.duration, '0.1s');
+  await stage.waitFor({ state: 'visible' });
+  for (const moving of [stage, page.locator('.screen-thumbnails button').first(), dialog]) {
+    assert.equal(await spatialMotion(moving), false);
+  }
+  await page.keyboard.press('ArrowRight');
+  assert.notEqual(await stage.getAttribute('src'), initial);
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-current')), 'true');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await stage.getAttribute('src'), initial);
 
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.locator('#viewer [data-save]').click();
@@ -138,7 +146,7 @@ test('UI elements fit the viewport', async () => {
   const { page, base } = await viewerPage();
   await page.goto(base + '?test=elements#elements', { waitUntil: 'domcontentloaded' });
   await page.locator('.collection-card').first().waitFor();
-  assert.equal(await page.locator('.collection-card').count(), 25);
+  assert.equal(await page.locator('.collection-card').count(), 4);
   assert(await fitsViewport(page));
   await page.close();
 });

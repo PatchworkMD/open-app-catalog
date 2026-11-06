@@ -1,3 +1,4 @@
+import html
 import json
 import tempfile
 import unittest
@@ -33,11 +34,34 @@ class SearchPagesTest(unittest.TestCase):
             self.assertIn('Sitemap:', (root / 'robots.txt').read_text())
             about = (root / 'about/index.html').read_text()
             self.assertIn('up to 100 free apps in each supported US App Store category', about)
-            self.assertIn('Optional Google or email accounts and private shared boards require Firebase setup', about)
-            self.assertNotIn('There is no account sync', about)
+            policy = json.loads((Path(__file__).resolve().parents[1] / 'site/publication-policy.json').read_text())
+            for statement in policy.values():
+                self.assertIn(html.escape(statement), about)
+            self.assertNotIn('Firebase setup', about)
             llms = (root / 'llms.txt').read_text()
             self.assertIn('up to 100 free apps per supported US App Store chart category', llms)
-            self.assertIn('private shared boards require Firebase setup', llms)
+            for statement in policy.values():
+                self.assertIn(statement, llms)
+            self.assertNotIn('Firebase setup', llms)
+
+    def test_malformed_snapshot_records_are_skipped_not_published(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sid = 'e' * 64
+            url = 'https://apps.apple.com/us/app/kept/id789'
+            data = {'coverage': {'generatedAt': '2026-11-01T06:17:00Z'}, 'apps': [
+                {'id': '1', 'name': 7, 'assetIds': {}},
+                {'id': '2', 'name': 'Broken lists', 'assetIds': 'x', 'url': url},
+                {'id': '789', 'name': 'Kept app', 'assetIds': [sid, ['nested']], 'url': url, 'categories': ['Education', 4]},
+            ], 'screens': [{'id': sid, 'path': f'assets/{sid}.png', 'title': ['bad']}, {'id': 'f' * 64, 'path': ['bad']}]}
+            (root / 'data.json').write_text(json.dumps(data))
+
+            build(root)
+
+            self.assertEqual(sorted(p.name for p in (root / 'apps').iterdir() if p.is_dir()), ['789'])
+            page = (root / 'apps/789/index.html').read_text()
+            self.assertIn('Kept app', page)
+            self.assertIn(f'assets/{sid}.png', page)
 
     def test_empty_input_does_not_replace_existing_pages(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -60,7 +84,7 @@ class SearchPagesTest(unittest.TestCase):
                         'path': f'assets/{sid}.jpg', 'sourceUrl': 'https://apps.apple.com/us/app/example/id456',
                         'reviewedAt': '2026-09-19', 'source': 'site/data.json'}
             curation = {'screens': [reviewed], 'elements': [
-                {'screenId': sid, 'title': 'Reviewed pattern', 'description': 'Pattern evidence.'}
+                {'id': 'reviewed-pattern', 'screenId': sid, 'title': 'Reviewed pattern', 'description': 'Pattern evidence.'}
             ], 'flows': []}
             (root / 'data.json').write_text(json.dumps(data))
             (root / 'curation.json').write_text(json.dumps(curation))

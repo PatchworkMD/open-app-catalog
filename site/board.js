@@ -27,7 +27,10 @@ function read(storage, key) {
  */
 export function createBoard(storage) {
   /** @returns {BoardItems} */
-  const readDevice = () => ({ screens: read(storage, STORAGE_KEYS.screen), collections: read(storage, STORAGE_KEYS.collection) });
+  const readDevice = () => ({
+    screens: read(storage, STORAGE_KEYS.screen),
+    collections: read(storage, STORAGE_KEYS.collection),
+  });
   let items = readDevice();
   let remote = false;
   let warning = '';
@@ -36,8 +39,12 @@ export function createBoard(storage) {
 
   return {
     readDevice,
-    get remote() { return remote; },
-    get warning() { return warning; },
+    get remote() {
+      return remote;
+    },
+    get warning() {
+      return warning;
+    },
     /** @param {BoardKind} kind @param {string} id */
     has: (kind, id) => listFor(kind).includes(id),
     /** @param {BoardKind} kind */
@@ -62,10 +69,13 @@ export function createBoard(storage) {
     },
     /** @param {unknown} value */
     useRemote(value) {
-      const record = /** @type {{screens?:unknown, collections?:unknown} | null} */ (typeof value === 'object' ? value : null);
+      const record = typeof value === 'object' && value !== null ? value : {};
       remote = true;
       warning = '';
-      items = { screens: ids(record?.screens), collections: ids(record?.collections) };
+      items = {
+        screens: ids('screens' in record ? record.screens : undefined),
+        collections: ids('collections' in record ? record.collections : undefined),
+      };
     },
     useDevice() {
       remote = false;

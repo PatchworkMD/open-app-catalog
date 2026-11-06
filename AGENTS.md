@@ -18,11 +18,21 @@ Read [CONTEXT.md](CONTEXT.md) and [GLOSSARY.md](GLOSSARY.md) first, and use the 
 
 ## Verify
 
-`npm ci`, then `PLAYWRIGHT_CHANNEL=chromium-headless-shell npm run verify`. The pre-commit hook runs `npm run verify:fast`.
+```sh
+npm ci
+npx playwright install chromium-headless-shell
+sudo npx playwright install-deps chromium-headless-shell   # system libraries; needs root
+PLAYWRIGHT_CHANNEL=chromium-headless-shell npm run verify
+```
+
+Without root on Debian bookworm (amd64), replace the `install-deps` line with `npm run setup:browser-libs`. It unpacks the same libraries from deb.debian.org into the gitignored `.cache/browser-libs/`, and the test launcher picks them up automatically.
+
+The pre-commit hook runs `npm run verify:fast` (format check, syntax, types, pipeline and unit tests). The pre-push hook refuses pushes to `master`/`main`, branch deletions and force pushes.
 
 ## Rules
 
 - Branches and PRs only. Never merge, deploy, push to `master` or run the Update catalog workflow.
+- Never close issues or PRs without Austin's decision.
 - Never change credentials, Firebase or Cloudflare configuration.
 - Keep routes, storage keys, export fields and reference IDs stable.
 - Test with synthetic data. Never commit a refreshed `site/data.json` by hand.
