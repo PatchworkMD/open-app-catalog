@@ -1,37 +1,28 @@
 # Hugging App status, 2026-11-06
 
-## Approved product scope
+## Scope
 
-Austin approved local-first: the public App Store design research catalog plus local saved boards. Cloud accounts and synced/shared boards belong to a later, separate release. No product questions remain for this release.
+Austin approved the local-first release on 2026-11-05 (ADR-0001): the public catalog built from Apple's public feeds, with boards saved on the visitor's device. Cloud accounts and shared boards need their own reviewed release. Routes, storage keys, export fields and reference IDs stay stable.
 
-The catalog uses Apple's public feeds, with honest screenshot/source labels and no claims of verified interaction flows or revenue intelligence. Browser storage keys, exports, reference IDs, and existing public APIs are preserved.
+## Delivery stack
 
-## Done
+Merge in this order. Each PR's base is the one before it. Nothing is merged or deployed. Merging into `master` starts the production Update catalog workflow.
 
-- PR #11 fixes mobile Flows overflow, checks all main routes and the focused viewer at 390px/320px, and adds read-only PR validation with screenshots. Both GitHub validation runs passed; automated review reported no findings.
-- The local-first page no longer loads the deferred cloud-account module or requests Firebase configuration. Cloud source remains available; its emulator harness explicitly loads it for future development.
-- Public copy explains device-local storage, export, and the effect of clearing browser storage.
-- A regression test first reproduced the unwanted Account UI. It now verifies saved-board persistence/export, absence of account traffic/UI, and no console errors across all main routes.
-- Validation: 31 Python tests and 15 Node/browser tests passed; 803 reference pages built; JavaScript syntax and whitespace checks passed. The expanded all-route console test also passed separately.
-- Reviewed saved-board and viewer screenshots at 390px/320px. Local evidence: `/tmp/hugging-app-local-board-390.png`, `/tmp/hugging-app-local-board-320.png`, and `/tmp/hugging-app-viewer-320.png`. Fixture images verify layout and controls.
-- Captured and reviewed local board screenshots with a real representative live media image at both widths: `/tmp/hugging-app-real-board-390.png` and `/tmp/hugging-app-real-board-320.png`.
-- Read-only live Worker verification passed: current snapshot, representative media, canonical reference page, and repeat-fetch consistency.
+1. [#11](https://github.com/PatchworkMD/open-app-catalog/pull/11): mobile layout fix and read-only PR validation.
+2. [#12](https://github.com/PatchworkMD/open-app-catalog/pull/12): local-first release page.
+3. [#13](https://github.com/PatchworkMD/open-app-catalog/pull/13): CONTEXT, GLOSSARY, ADR-0001, agent guide.
+4. [#14](https://github.com/PatchworkMD/open-app-catalog/pull/14): one `verify` command, pre-commit hook, fixture-backed browser tests.
+5. [#15](https://github.com/PatchworkMD/open-app-catalog/pull/15): shared Snapshot rules, Board module, accessibility fixes.
+6. `push/20261106-quality-10-r2`: validated Snapshot intake, typed browser modules, publication policy, Apple response validation, product fixes, format and git guards.
 
-## Delivery
+## Gates for Austin
 
-- [PR #11](https://github.com/PatchworkMD/open-app-catalog/pull/11): mobile layout and isolated PR validation.
-- [PR #12](https://github.com/PatchworkMD/open-app-catalog/pull/12): local-first release, stacked on #11. The release candidate is locally validated; current CI and review results are tracked on the PR.
+Product decisions:
 
-## Gates
+- Rename the visible **Flows** label to **Collections**? Recommended: yes, label only; `#flows`, `flows:` keys and export fields stay.
+- Create the four missing triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`) on GitHub? Recommended: yes. Only `wontfix` exists today.
+- Keep PRs #4 to #7 open as reference for the cloud release? Recommended: yes.
 
-No unresolved product gates. Cloud activation and its Firebase integration testing are excluded from this release. Nothing has been merged or deployed. Merging changes into master can trigger the existing production deployment workflow; merge and deployment remain outside this task's authorization.
+Release handoff:
 
-## Quality hillclimb, 2026-11-06
-
-Three PRs stacked on #12 (domain docs, then the verify loop, then the Snapshot and Board modules). Local results on the last branch: 32 Python tests passed, and 33/33 Node tests passed (unit and browser) in 185s. `tsc` is clean. The Worker dry-run bundle includes the shared rules.
-
-### Gates for Austin
-
-- Rename the **Flows** label to **Collections**? Recommended: yes. Change only the label and keep the `#flows` route and `flows:` keys. Not done yet.
-- Keep PRs #4 to #7 open as reference for the cloud release? Recommended: yes. They are untouched.
-- Review and merge #12, then the stacked PRs, in order. Merging to master triggers the production workflow.
+- Review and merge the stack above in order, then watch the first Update catalog run.
