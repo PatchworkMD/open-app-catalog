@@ -32,3 +32,13 @@ Record product decisions in STATUS.md with recommended options first. Do not act
 4. Open a second small PR stacked on #11. No merge or deployment.
 
 Local-first verification: all 31 Python and 15 Node/browser tests passed; the expanded all-route console regression passed. Real representative media was reviewed in local-board screenshots at both widths. Read-only live Worker verification passed. Product gate resolved; only PR checks/review remain before handback.
+
+## Quality hillclimb (2026-11-06)
+
+Goal: raise the 2026-11-06 rubric score (`~/.codex/quality-eval/RUBRIC-20261106.md`) from 4.6 to a mean of 7+, without changing routes, storage keys, exports or reference IDs.
+
+1. Domain language and agent work surface: CONTEXT.md, GLOSSARY.md, ADR-0001, AGENTS.md, docs/agents.
+2. Feedback loop and tests: one `npm run verify`, Husky pre-commit, a synthetic fixture snapshot, and node:test browser cases.
+3. Deep modules and typed edges: shared Snapshot rules (JS and Python, one case table), a Board module with an in-memory test adapter, `tsc` checkJs on the new modules and the Worker, plus the skip link, item-specific action names and heading order.
+
+Each step ships as its own PR, stacked on #12. Nothing is merged or deployed.

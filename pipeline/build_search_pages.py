@@ -1,9 +1,9 @@
 """Build public, source-linked HTML references from the same catalog snapshot."""
 import html
 import json
-import re
 from pathlib import Path
-from urllib.parse import urlparse
+
+from snapshot_rules import is_apple_source_url, is_asset_path, is_full_size_url, is_reviewed_screenshot
 
 BASE = 'https://catalog.patchworkmd.dev'
 ASSET_VERSION = '20261009-polish'
@@ -13,23 +13,12 @@ def esc(value):
     return html.escape(str(value), quote=True)
 
 def apple_url(value):
-    u = urlparse(value or '')
-    return value if u.scheme == 'https' and u.hostname in {'apps.apple.com', 'itunes.apple.com'} else ''
+    return value if is_apple_source_url(value) else ''
 
 def image_path(value):
-    return value if re.fullmatch(r'assets/[a-f0-9]{64}\.[a-z0-9]{2,4}', value or '') else ''
+    return value if is_asset_path(value) else ''
 
-def curated_screen(record):
-    if not isinstance(record, dict):
-        return False
-    screen_id = record.get('id', '')
-    path = image_path(record.get('path'))
-    return bool(
-        re.fullmatch(r'[a-f0-9]{64}', screen_id)
-        and path
-        and path.rsplit('/', 1)[-1].rsplit('.', 1)[0] == screen_id
-        and apple_url(record.get('sourceUrl'))
-    )
+curated_screen = is_reviewed_screenshot
 
 def document(title, description, path, body, modified):
     schema = {'@context':'https://schema.org','@type':'CollectionPage','name':title,'description':description,'url':BASE+path,'dateModified':modified,'isPartOf':{'@type':'WebSite','name':'Hugging App','url':BASE+'/'}}
@@ -54,7 +43,7 @@ def build(root=ROOT):
     pages = {}
     def shot(s):
         full = s.get('fullSizeUrl') or sources.get(s['id'], '')
-        if not re.fullmatch(r'https://is[0-9]+-ssl\.mzstatic\.com/image/thumb/[^?#]+/1290x2796bb\.png', full):
+        if not is_full_size_url(full):
             full = '/' + s['path']
         return f'<a href="{esc(full)}"><img src="{esc(full)}" alt="{esc(s.get("title","App"))} App Store screenshot" loading="lazy" onerror="this.onerror=null;this.src=&#39;/{esc(s["path"])}&#39;;this.parentElement.href=this.src"></a>'
     entries = []
