@@ -1,4 +1,4 @@
-# Hugging App status — 2026-11-05
+# Hugging App status, 2026-11-06
 
 ## Approved product scope
 
@@ -25,3 +25,13 @@ The catalog uses Apple's public feeds, with honest screenshot/source labels and 
 ## Gates
 
 No unresolved product gates. Cloud activation and its Firebase integration testing are excluded from this release. Nothing has been merged or deployed. Merging changes into master can trigger the existing production deployment workflow; merge and deployment remain outside this task's authorization.
+
+## Quality hillclimb, 2026-11-06
+
+Three PRs stacked on #12 (domain docs, then the verify loop, then the Snapshot and Board modules). Local results on the last branch: 32 Python tests passed, and 33/33 Node tests passed (unit and browser) in 185s. `tsc` is clean. The Worker dry-run bundle includes the shared rules.
+
+### Gates for Austin
+
+- Rename the **Flows** label to **Collections**? Recommended: yes. Change only the label and keep the `#flows` route and `flows:` keys. Not done yet.
+- Keep PRs #4 to #7 open as reference for the cloud release? Recommended: yes. They are untouched.
+- Review and merge #12, then the stacked PRs, in order. Merging to master triggers the production workflow.
