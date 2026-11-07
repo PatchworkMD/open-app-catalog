@@ -53,12 +53,16 @@ const {catalogBase} = require('./browser-fixture.cjs');
       if (['agents','plugin'].includes(route)) assert.equal(await page.locator('#export').isVisible(),false);
       if (route==='unknown') assert.equal(await page.locator('#title').textContent(),'Apps');
     }
-    await page.setViewportSize({width:390,height:844});
-    await page.goto(base + '#apps'); await page.locator('.app-open').first().waitFor();
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.screenshot({path:path.join(evidence,'mobile.png')});
-    await page.goto(base + '#plugin'); await page.locator('#content .doc h2').waitFor();
-    await page.screenshot({path:path.join(evidence,'plugin.png')});
+    for (const width of [390,320]) {
+      await page.setViewportSize({width,height:844});
+      for (const route of ['apps','screens','elements','flows','boards','agents','plugin']) {
+        await page.goto(base + '#' + route);
+        await page.waitForFunction(() => document.querySelector('#coverage').textContent.includes('Snapshot'));
+        if (['elements','flows'].includes(route)) await page.locator('.collection-card').first().waitFor();
+        await page.screenshot({path:path.join(evidence,`${route}-${width}.png`),animations:'disabled'});
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} overflows at ${width}px`);
+      }
+    }
     const blocked = await browser.newPage();
     await catalogBase(blocked);
     await blocked.route('**/data.json',route => route.fulfill({status:503}));

@@ -81,17 +81,19 @@ const {catalogBase} = require('./browser-fixture.cjs');
 
     await page.keyboard.press('Escape');
     await dialog.waitFor({state:'hidden'});
-    await page.setViewportSize({width:390,height:844});
-    await page.goto(base + '?test=mobile#apps',{waitUntil:'domcontentloaded'});
-    await page.locator('.app-open').first().click();
-    await cards.first().waitFor({state:'visible'});
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.locator('.app-detail-image').first().click();
-    await stage.waitFor({state:'visible'});
-    await assertScreenFits();
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.screenshot({path:'/tmp/hugging-focused-mobile.png',animations:'disabled'});
-    await page.keyboard.press('Escape');
+    for (const width of [390,320]) {
+      await page.setViewportSize({width,height:844});
+      await page.goto(base + `?test=mobile-${width}#apps`,{waitUntil:'domcontentloaded'});
+      await page.locator('.app-open').first().click();
+      await cards.first().waitFor({state:'visible'});
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.locator('.app-detail-image').first().click();
+      await stage.waitFor({state:'visible'});
+      await assertScreenFits();
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.screenshot({path:`/tmp/hugging-app-viewer-${width}.png`,animations:'disabled'});
+      await page.keyboard.press('Escape');
+    }
 
     await page.goto(base + '?test=elements#elements',{waitUntil:'domcontentloaded'});
     await page.locator('.collection-card').first().waitFor();
