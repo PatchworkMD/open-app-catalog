@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
 
 const siteRoot = path.resolve(__dirname, '../site');
 const localOrigin = 'http://hugging-app.test';
+
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -17,6 +18,7 @@ const mimeTypes = {
   '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2',
 };
+
 const previewFixture = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="640"><rect width="320" height="640" fill="#7371d9"/></svg>'
 );
@@ -30,6 +32,7 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 function fixtureSnapshot() {
   const apps = [],
     screens = [];
+
   FIXTURE_CATEGORIES.forEach((category, c) => {
     for (let rank = 1; rank <= FIXTURE_APPS_PER_CATEGORY; rank++) {
       const n = c * FIXTURE_APPS_PER_CATEGORY + rank;
@@ -37,6 +40,7 @@ function fixtureSnapshot() {
       const id = String(9000000 + n);
       const url = `https://apps.apple.com/us/app/fixture-app-${n}/id${id}`;
       const assetIds = [];
+
       for (let s = 0; s < FIXTURE_SCREENSHOTS_PER_APP; s++) {
         const screenId = hash(`${name} screenshot ${s}`);
         assetIds.push(screenId);
@@ -50,6 +54,7 @@ function fixtureSnapshot() {
           fullSizeUrl: `https://is1-ssl.mzstatic.com/image/thumb/Fixture/${screenId}.png/1290x2796bb.png`,
         });
       }
+
       apps.push({
         id,
         name,
@@ -64,6 +69,7 @@ function fixtureSnapshot() {
       });
     }
   });
+
   return {
     apps,
     screens,
@@ -85,6 +91,7 @@ const appUrl = n => `https://apps.apple.com/us/app/fixture-app-${n}/id${9000000 
 function fixtureReviewedLibrary() {
   const pinned = [1, 2].map(n => {
     const id = hash(`Reviewed pinned screenshot ${n}`);
+
     return {
       id,
       path: `assets/${id}.png`,
@@ -96,7 +103,9 @@ function fixtureReviewedLibrary() {
       curatedOnly: true,
     };
   });
+
   const reviewed = (category, appName, n) => ({ category, appName, sourceUrl: appUrl(n), reviewedAt: '2026-10-01' });
+
   return {
     schemaVersion: 1,
     screens: pinned,
@@ -165,38 +174,50 @@ function fixtureReviewedLibrary() {
 
 async function reviewedLibraryBody() {
   if (process.env.CATALOG_SNAPSHOT === 'live') return fs.readFile(path.join(siteRoot, 'curation.json'));
+
   return Buffer.from(JSON.stringify(fixtureReviewedLibrary()));
 }
 
 async function snapshotBody() {
   const source = process.env.CATALOG_SNAPSHOT;
+
   if (source === 'live') return fs.readFile(path.join(siteRoot, 'data.json'));
+
   if (source) return fs.readFile(source);
+
   return Buffer.from(JSON.stringify(fixtureSnapshot()));
 }
 
 async function catalogBase(page) {
   const configured = process.env.CATALOG_TEST_URL;
+
   if (configured) return configured.endsWith('/') ? configured : `${configured}/`;
 
   await page.route(`${localOrigin}/**`, async route => {
     try {
       const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
       const relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
+
       if (/^\/assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(relative)) {
         return route.fulfill({ status: 200, body: previewFixture, contentType: 'image/svg+xml' });
       }
+
       if (relative === '/data.json') {
         return route.fulfill({ status: 200, body: await snapshotBody(), contentType: mimeTypes['.json'] });
       }
+
       if (relative === '/curation.json') {
         return route.fulfill({ status: 200, body: await reviewedLibraryBody(), contentType: mimeTypes['.json'] });
       }
+
       const file = path.resolve(siteRoot, `.${relative}`);
+
       if (file !== siteRoot && !file.startsWith(`${siteRoot}${path.sep}`)) {
         return route.fulfill({ status: 403, body: 'Blocked path' });
       }
+
       const body = await fs.readFile(file);
+
       return route.fulfill({
         status: 200,
         body,
@@ -206,6 +227,7 @@ async function catalogBase(page) {
       return route.fulfill({ status: 404, body: 'Not found' });
     }
   });
+
   return `${localOrigin}/`;
 }
 
@@ -213,9 +235,11 @@ const browserLibs = path.resolve(__dirname, '../.cache/browser-libs/root');
 
 function launchBrowser() {
   const options = { headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' };
+
   if (!fsSync.existsSync(browserLibs)) return chromium.launch(options);
   const libraryPath = ['usr/lib/x86_64-linux-gnu', 'lib/x86_64-linux-gnu'].map(dir => path.join(browserLibs, dir));
   const inherited = process.env.LD_LIBRARY_PATH ? [process.env.LD_LIBRARY_PATH] : [];
+
   return chromium.launch({
     ...options,
     env: { ...process.env, LD_LIBRARY_PATH: [...libraryPath, ...inherited].join(':') },
@@ -225,6 +249,7 @@ function launchBrowser() {
 async function evidencePath(name) {
   const dir = path.join(process.env.TMPDIR || require('node:os').tmpdir(), 'hugging-app-evidence');
   await fs.mkdir(dir, { recursive: true });
+
   return path.join(dir, name);
 }
 

@@ -23,6 +23,7 @@ import { isAppleSourceUrl, isAssetPath, isFullSizeUrl } from './snapshot.js';
 
 /** @type {Record<string, string>} */
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
 /** @param {unknown} value */
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ENTITIES[c] ?? c);
 
@@ -33,6 +34,7 @@ export const categoriesForApp = app => (app.categories.length ? app.categories :
 export const screenshotsFor = (ctx, ids) =>
   ids.flatMap(id => {
     const screenshot = ctx.screenshotById.get(id);
+
     return screenshot ? [screenshot] : [];
   });
 
@@ -47,12 +49,15 @@ export function media(ctx, screenshot, fullSize = false) {
   const candidate = screenshot.fullSizeUrl || ctx.resolution[screenshot.id] || '';
   const full = isFullSizeUrl(candidate) ? candidate : '';
   const preview = screenshot.path;
+
   if (!isAssetPath(preview)) return '<span>Media unavailable</span>';
   const src = fullSize && full ? full : preview;
+
   const srcset =
     !fullSize && full
       ? ` srcset="${esc(preview)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"`
       : '';
+
   return `<img data-catalog-media src="${esc(src)}"${srcset} data-preview="${esc(preview)}" loading="eager" alt="${esc(screenshot.title || 'App Store screenshot')}">`;
 }
 
@@ -69,12 +74,14 @@ const actionText = (text, item) => `<span class="action-text">${text}</span><spa
 const screenActions = (ctx, id, item) => {
   const saved = ctx.isSaved('screen', id),
     selected = ctx.isSelected(id);
+
   return `<button data-save="${esc(id)}" aria-pressed="${saved}">${actionText(saved ? 'Saved' : 'Save', item)}</button><button data-select="${esc(id)}" aria-pressed="${selected}">${actionText(selected ? 'Selected' : 'Compare', item)}</button>`;
 };
 
 /** @param {ViewContext} ctx @param {Screenshot} screenshot */
 export function screenCard(ctx, screenshot) {
   const label = screenshot.title || 'screenshot';
+
   return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(screenshot.id)}" aria-label="Open ${esc(label)}">${media(ctx, screenshot)}</button><p class="pincaption">${esc(screenshot.title || 'Screenshot')}</p><span class="pinmeta">${esc(screenshot.category || 'App Store')}</span><div class="pinactions">${screenActions(ctx, screenshot.id, label)}</div></article>`;
 }
 
@@ -91,12 +98,15 @@ export function reviewedCard(ctx, entry) {
   const { kind, record } = entry;
   const ids = reviewedScreenshotIds(entry);
   const screenshots = screenshotsFor(ctx, ids);
+
   const collectionId = `${kind}:${record.id}`,
     saved = ctx.isSaved('collection', collectionId);
+
   const actions =
     kind === 'flows'
       ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${saved}">${actionText(saved ? 'Saved' : 'Save collection', record.title)}</button>`
       : ids.map(id => screenActions(ctx, id, record.title)).join('');
+
   const meta = [
     record.category || 'Reviewed reference',
     record.appName,
@@ -105,6 +115,7 @@ export function reviewedCard(ctx, entry) {
     .filter(Boolean)
     .map(esc)
     .join(' · ');
+
   return `<article class="pin collection-card collection-${kind}"><button class="collection-open" data-collection="${esc(record.id)}" data-collection-kind="${kind}" aria-label="Open ${esc(record.title)}"><div class="collection-previews">${screenshots.map(s => `<span>${media(ctx, s)}</span>`).join('')}</div><span class="pincaption">${esc(record.title)}</span><span class="pinmeta">${meta}</span><p class="collection-description">${esc(record.description || '')}</p></button><div class="pinactions">${actions}</div></article>`;
 }
 
@@ -119,28 +130,34 @@ export function appCard(ctx, app) {
   const rank = ctx.snapshot.coverage.rankBasis === 'original-category-feed' ? chartRankIn(app, category) : undefined;
   const badge = rank !== undefined ? `<span class="pinrank">#${rank} in ${esc(category)}</span>` : '';
   const labels = ctx.category ? [ctx.category] : categoriesForApp(app);
+
   return `<article class="pin"><button class="app-open" data-related="${esc(app.id)}" aria-label="Open ${esc(app.name)}"><div class="pinmedia">${cover ? media(ctx, cover) : `<div class="pinfallback">${appIcon(app)}</div>`}${badge}</div><span class="pincaption">${esc(app.name)}</span><span class="pinmeta">${esc(labels.join(' · ') || 'App Store')}</span></button></article>`;
 }
 
 /** @param {ViewContext} ctx @param {App} app @param {Screenshot[]} screenshots */
 export function appDetail(ctx, app, screenshots) {
   const source = sourceLink(app.url);
+
   const links = [
     source,
     source && screenshots.length ? `<a href="/apps/${encodeURIComponent(app.id)}/">Open reference page ↗</a>` : '',
   ]
     .filter(Boolean)
     .join(' · ');
+
   const rating = app.rating !== undefined ? ` · ${app.rating.toFixed(1)} / 5 App Store rating` : '';
   const count = `${screenshots.length} listing screenshot${screenshots.length === 1 ? '' : 's'}`;
   const summary = `<div class="app-detail-summary"><p>${links}</p><p class="coverage">${esc(categoriesForApp(app).join(' · ') || 'App Store')} · ${count}${rating}</p></div>`;
+
   const cards = screenshots.map(
     (s, i) =>
       `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(app.id)}" aria-label="Open app screenshot ${i + 1}">${media(ctx, { ...s, title: `Screenshot ${i + 1}` })}</button><div class="app-detail-caption"><span>Screenshot ${i + 1}</span><div class="pinactions">${screenActions(ctx, s.id, s.title || app.name)}</div></div></article>`
   );
+
   const gallery = cards.length
     ? `<div class="app-gallery">${cards.join('')}</div>`
     : '<div class="empty"><h3>No screenshots available yet.</h3><p>This app listing does not include screenshots in the current snapshot.</p></div>';
+
   return summary + gallery;
 }
 
@@ -148,13 +165,16 @@ export function appDetail(ctx, app, screenshots) {
 export function screenViewer(ctx, viewer, returnApp) {
   const { screenshots, index, context } = viewer,
     current = screenshots[index];
+
   const back = returnApp ? `<button class="screen-back" data-back-app="${esc(returnApp.id)}">Back to app</button>` : '';
+
   const thumbnails = screenshots
     .map(
       (s, i) =>
         `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media(ctx, { ...s, title: `Screenshot ${i + 1}` })}</button>`
     )
     .join('');
+
   return `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(ctx, current, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === screenshots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${screenshots.length}</span>${back}<div class="pinactions">${screenActions(ctx, current.id, current.title || 'screenshot')}</div>${sourceLink(current.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${thumbnails}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
 }
 
@@ -162,8 +182,10 @@ export function screenViewer(ctx, viewer, returnApp) {
 export function emptyState(route, label) {
   if (route === 'boards')
     return '<h2>Your board is empty.</h2><p>Save screenshots or a collection, then export your board.</p><a href="#flows">Explore collections</a>';
+
   if (route === 'flows' || route === 'elements')
     return `<h2>No ${esc(label.toLowerCase())} in this snapshot</h2><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections need human review.</p><a href="#screens">Explore screenshots</a>`;
+
   return '<h2>No matching results</h2><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
 }
 

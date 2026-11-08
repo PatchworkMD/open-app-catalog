@@ -3,9 +3,11 @@ const assert = require('node:assert/strict');
 const { catalogBase, launchBrowser, evidencePath, fitsViewport } = require('./browser-fixture.cjs');
 
 let browser;
+
 before(async () => {
   browser = await launchBrowser();
 });
+
 after(() => browser?.close());
 
 async function viewerPage() {
@@ -19,6 +21,7 @@ async function viewerPage() {
         body: '<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796"><rect width="1290" height="2796" fill="#101010"/></svg>',
       })
   );
+
   return {
     page,
     base,
@@ -29,20 +32,24 @@ async function viewerPage() {
 }
 
 const SPATIAL = 'transform|translate|scale|rotate|all';
+
 function spatialMotion(locator) {
   return locator.evaluate((el, pattern) => {
     const spatial = new RegExp(`^(${pattern})$`);
     const style = getComputedStyle(el);
     const durations = style.transitionDuration.split(',').map(parseFloat);
+
     const transitions = style.transitionProperty
       .split(',')
       .map(property => property.trim())
       .filter((property, i) => spatial.test(property) && durations[i % durations.length] > 0);
+
     const animations = el
       .getAnimations()
       .filter(animation =>
         animation.effect?.getKeyframes().some(frame => Object.keys(frame).some(key => spatial.test(key)))
       );
+
     return transitions.length + animations.length > 0;
   }, SPATIAL);
 }
@@ -91,9 +98,11 @@ test('the app viewer shows a gallery, a sharp screenshot, keyboard steps, reduce
   await page.getByRole('button', { name: 'Screenshot 1', exact: true }).click();
   assert.equal(await stage.getAttribute('src'), initial);
   await stage.waitFor({ state: 'visible' });
+
   for (const moving of [stage, page.locator('.screen-thumbnails button').first(), dialog]) {
     assert.equal(await spatialMotion(moving), false);
   }
+
   await page.keyboard.press('ArrowRight');
   assert.notEqual(await stage.getAttribute('src'), initial);
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-current')), 'true');
@@ -125,6 +134,7 @@ test('the app viewer shows a gallery, a sharp screenshot, keyboard steps, reduce
 
 test('the app viewer fits 390px and 320px', async () => {
   const { page, base, cards, stage } = await viewerPage();
+
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto(base + `?test=mobile-${width}#apps`, { waitUntil: 'domcontentloaded' });

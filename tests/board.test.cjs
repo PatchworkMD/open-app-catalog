@@ -5,6 +5,7 @@ const boardModule = import('../site/board.js');
 
 function memoryStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
+
   return {
     values,
     getItem: key => (values.has(key) ? values.get(key) : null),
@@ -30,12 +31,14 @@ test('a corrupt or unreadable device board starts empty', async () => {
   const { createBoard } = await boardModule;
   assert.deepEqual(createBoard(memoryStorage({ 'oac-board': '{not json' })).list('screen'), []);
   assert.deepEqual(createBoard(memoryStorage({ 'oac-board': '{"a":1}' })).list('screen'), []);
+
   const denied = {
     getItem: () => {
       throw new Error('denied');
     },
     setItem: () => {},
   };
+
   assert.deepEqual(createBoard(denied).list('screen'), []);
 });
 
@@ -43,6 +46,7 @@ test('denied storage keeps the change for the session and reports a warning unti
   const { createBoard, STORAGE_WARNING } = await boardModule;
   let deny = true;
   const storage = memoryStorage();
+
   const board = createBoard({
     getItem: storage.getItem,
     setItem: (k, v) => {
@@ -50,6 +54,7 @@ test('denied storage keeps the change for the session and reports a warning unti
       storage.setItem(k, v);
     },
   });
+
   assert.equal(board.toggle('screen', 'shot-1'), true);
   assert.equal(board.has('screen', 'shot-1'), true);
   assert.equal(board.warning, STORAGE_WARNING);

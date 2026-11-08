@@ -4,13 +4,17 @@ const path = require('node:path');
 const { createRequire } = require('node:module');
 
 const modules = process.env.HUGGINGAPP_FIREBASE_NODE_MODULES;
+
 if (!modules)
   throw new Error('Set HUGGINGAPP_FIREBASE_NODE_MODULES to the isolated emulator tooling node_modules directory.');
+
 const load = createRequire(path.join(modules, 'package.json'));
 const { initializeTestEnvironment, assertSucceeds, assertFails } = load('@firebase/rules-unit-testing');
 const firestore = load('firebase/firestore');
+
 const { doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, serverTimestamp, collection, updateDoc, query, where } =
   firestore;
+
 const projectId = 'demo-huggingapp-auth-review';
 const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
 
@@ -24,6 +28,7 @@ const invitePath = (db, id) => doc(db, 'boardInvites', id);
 function ownerBatch(db, id, uid, email, { omit = '', title = `Board ${id}` } = {}) {
   const batch = writeBatch(db),
     now = serverTimestamp();
+
   if (omit !== 'board')
     batch.set(boardPath(db, id), {
       ownerUid: uid,
@@ -33,42 +38,57 @@ function ownerBatch(db, id, uid, email, { omit = '', title = `Board ${id}` } = {
       schemaVersion: 1,
       state: 'active',
     });
+
   if (omit !== 'identity') batch.set(identityPath(db, id), { ownerUid: uid, state: 'active', createdAt: now });
+
   if (omit !== 'member')
     batch.set(memberPath(db, id, uid), { uid, email, role: 'owner', joinedAt: now, inviteId: null });
+
   if (omit !== 'index') batch.set(indexPath(db, uid, id), { boardId: id, title, role: 'owner' });
+
   return batch.commit();
 }
 
 function inviteAcceptBatch(db, id, inviteId, uid, email, { omit = '' } = {}) {
   const batch = writeBatch(db);
+
   if (omit !== 'invite') batch.update(invitePath(db, inviteId), { status: 'accepted', acceptedByUid: uid });
+
   if (omit !== 'member')
     batch.set(memberPath(db, id, uid), { uid, email, role: 'member', joinedAt: serverTimestamp(), inviteId });
+
   if (omit !== 'index') batch.set(indexPath(db, uid, id), { boardId: id, title: `Board ${id}`, role: 'member' });
+
   return batch.commit();
 }
 
 async function main() {
   const address = process.env.FIRESTORE_EMULATOR_HOST || '';
+
   if (!/^127\.0\.0\.1:\d+$/.test(address))
     throw new Error('FIRESTORE_EMULATOR_HOST must target the registered loopback emulator.');
   const port = Number(address.split(':')[1]);
+
   if (port < 1 || port > 65535) throw new Error('The Firestore Emulator port is invalid.');
   const env = await initializeTestEnvironment({ projectId, firestore: { host: '127.0.0.1', port, rules } });
+
   try {
     await env.clearFirestore();
+
     const assertAdminMissing = docPath =>
       env.withSecurityRulesDisabled(async ctx => {
         const snapshot = await ctx.firestore().doc(docPath).get();
         assert.equal(snapshot.exists, false, `${docPath} should not exist after a denied atomic batch`);
       });
+
     const alice = user(env, 'alice', 'alice@example.test');
     const bob = user(env, 'bob', 'Bob@Example.Test');
     const mallory = user(env, 'mallory', 'mallory@example.test');
+
     const unverified = env
       .authenticatedContext('unverified', { email: 'unverified@example.test', email_verified: false })
       .firestore();
+
     await assertFails(ownerBatch(unverified, 'unverified-board', 'unverified', 'unverified@example.test'));
     console.log('PASS verified-email requirement at owner bootstrap');
 
@@ -84,6 +104,7 @@ async function main() {
       await assertFails(ownerBatch(alice, id, 'alice', 'alice@example.test', { omit }));
       await assertAdminMissing(`boards/${id}`);
     }
+
     await assertSucceeds(ownerBatch(alice, 'ordinary-board-id', 'alice', 'alice@example.test'));
     await assertFails(ownerBatch(mallory, 'personal-bob', 'mallory', 'mallory@example.test'));
     await assertAdminMissing('boards/personal-bob');
@@ -93,6 +114,7 @@ async function main() {
     // Schema and timestamps are enforced at the write boundary.
     const bad = writeBatch(alice),
       stamp = serverTimestamp();
+
     bad.set(boardPath(alice, 'bad-client-time'), {
       ownerUid: 'alice',
       title: 'bad',
@@ -149,6 +171,7 @@ async function main() {
         acceptedByUid: null,
       })
     );
+
     const inbox = await assertSucceeds(
       getDocs(
         query(
@@ -158,16 +181,19 @@ async function main() {
         )
       )
     );
+
     assert.equal(
       inbox.docs.some(doc => doc.id === 'invite-valid-00001'),
       true,
       'invitee can list only their pending invitation'
     );
+
     const ownerInvites = await assertSucceeds(
       getDocs(
         query(collection(alice, 'boardInvites'), where('boardId', '==', boardId), where('ownerUid', '==', 'alice'))
       )
     );
+
     assert.equal(
       ownerInvites.docs.some(doc => doc.id === 'invite-valid-00001'),
       true,
@@ -176,6 +202,7 @@ async function main() {
     await assertSucceeds(
       updateDoc(boardPath(alice, boardId), { title: 'Renamed after invite', updatedAt: serverTimestamp() })
     );
+
     for (const omit of ['invite', 'member', 'index'])
       await assertFails(inviteAcceptBatch(bob, boardId, 'invite-valid-00001', 'bob', 'bob@example.test', { omit }));
     assert.equal((await assertSucceeds(getDoc(invitePath(bob, 'invite-valid-00001')))).data().status, 'pending');

@@ -4,11 +4,14 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 
 const guard = import('../scripts/git-guard.mjs');
+
 const local = 'a'.repeat(40),
   remote = 'b'.repeat(40),
   zero = '0'.repeat(40);
+
 const line = (remoteRef, localSha = local, remoteSha = remote) =>
   `refs/heads/topic ${localSha} ${remoteRef} ${remoteSha}\n`;
+
 const fastForward = () => true;
 
 test('a fast-forward push to a feature branch is allowed', async () => {
