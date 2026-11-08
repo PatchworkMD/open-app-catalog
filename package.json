@@ -19,11 +19,14 @@
     "test:site": "node --test --test-concurrency=1 tests/*.test.cjs",
     "verify:fast": "npm run format:check && npm run check:syntax && npm run typecheck && npm run test:pipeline && npm run test:unit",
     "verify": "npm run format:check && npm run check:syntax && npm run typecheck && npm run test:pipeline && npm run build:pages && npm run test:site",
-    "setup:browser-libs": "sh scripts/install-browser-libs.sh"
+    "setup:browser-libs": "sh scripts/install-browser-libs.sh",
+    "lint": "oxlint"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.92.0",
     "husky": "9.1.7",
     "lint-staged": "17.6.0",
+    "oxlint": "1.92.0",
     "playwright": "1.63.0",
     "prettier": "3.9.10",
     "typescript": "7.0.2"
