@@ -39,7 +39,11 @@ def _text(value: object) -> str | None:
 def _number(value: object) -> float | int | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return value if math.isfinite(value) else None
+    try:
+        return value if math.isfinite(value) else None
+    except OverflowError:
+        # JSON integers are unbounded in Python; beyond float range they are as invalid as 1e999 is in the browser.
+        return None
 
 
 def chart_rank(value: object) -> int | None:
