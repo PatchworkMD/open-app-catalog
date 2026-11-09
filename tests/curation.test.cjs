@@ -3,9 +3,11 @@ const assert = require('node:assert/strict');
 const { catalogBase, launchBrowser, evidencePath, fixtureReviewedLibrary } = require('./browser-fixture.cjs');
 
 let browser;
+
 before(async () => {
   browser = await launchBrowser();
 });
+
 after(() => browser?.close());
 
 test('collections and UI elements open, save to the board, search and export', async () => {

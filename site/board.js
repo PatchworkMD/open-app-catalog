@@ -31,6 +31,7 @@ export function createBoard(storage) {
     screens: read(storage, STORAGE_KEYS.screen),
     collections: read(storage, STORAGE_KEYS.collection),
   });
+
   let items = readDevice();
   let remote = false;
   let warning = '';
@@ -57,6 +58,7 @@ export function createBoard(storage) {
       const current = listFor(kind);
       const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
       items = kind === 'screen' ? { ...items, screens: next } : { ...items, collections: next };
+
       if (!remote) {
         try {
           storage.setItem(STORAGE_KEYS[kind], JSON.stringify(next));
@@ -65,6 +67,7 @@ export function createBoard(storage) {
           warning = STORAGE_WARNING;
         }
       }
+
       return next.includes(id);
     },
     /** @param {unknown} value */

@@ -11,3 +11,6 @@ site/robots.txt
 site/llms.txt
 package-lock.json
 .cache/
+
+# Vendored lint plugin, kept byte-identical to upstream.
+tools/oxlint/anti-slop/

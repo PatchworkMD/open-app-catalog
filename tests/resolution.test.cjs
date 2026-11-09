@@ -4,9 +4,11 @@ const curation = require('../site/curation.json');
 const { catalogBase, launchBrowser, evidencePath, fixtureSnapshot } = require('./browser-fixture.cjs');
 
 let browser;
+
 before(async () => {
   browser = await launchBrowser();
 });
+
 after(() => browser?.close());
 
 const appleImage =
@@ -16,9 +18,11 @@ test('the viewer shows the full-resolution Apple image and falls back to the cac
   const page = await browser.newPage({ viewport: { width: 1200, height: 1000 }, deviceScaleFactor: 2 });
   const base = await catalogBase(page);
   const screenIds = [...fixtureSnapshot().screens, ...curation.screens].map(screen => screen.id);
+
   const sources = Object.fromEntries(
     screenIds.map(id => [id, `https://is1-ssl.mzstatic.com/image/thumb/${id}/1290x2796bb.png`])
   );
+
   await page.route('**/image-sources.json', route =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(sources) })
   );

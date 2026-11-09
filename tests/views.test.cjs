@@ -5,6 +5,7 @@ const policy = require('../site/publication-policy.json');
 const views = import('../site/views.js');
 const id = c => c.repeat(64);
 const screenshot = (c, title = 'Untrusted <b>title</b>') => ({ id: id(c), path: `assets/${id(c)}.png`, title });
+
 const app = {
   id: '42',
   name: 'Two charts',
@@ -17,6 +18,7 @@ const app = {
 
 function context(overrides = {}) {
   const screens = [screenshot('a'), screenshot('b')];
+
   return {
     snapshot: { apps: [app], screens, flows: [], elements: [], coverage: { rankBasis: 'original-category-feed' } },
     screenshotById: new Map(screens.map(s => [s.id, s])),
@@ -59,6 +61,7 @@ test('media prefers a verified full-size source and ignores untrusted ones', asy
 test('the About page states the publication policy', async () => {
   const { aboutDoc } = await views;
   const html = aboutDoc(policy);
+
   for (const statement of Object.values(policy)) assert(html.includes(statement), statement);
   assert.doesNotMatch(html, /first category encountered|Firebase/);
 });

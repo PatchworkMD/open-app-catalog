@@ -16,6 +16,7 @@ export const FULL_SIZE_URL = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thu
 
 /** @param {unknown} value @returns {value is string} */
 const isString = value => typeof value === 'string';
+
 /** @param {RegExp} pattern @returns {(value: unknown) => value is string} */
 const matching = pattern => /** @returns {value is string} */ value => isString(value) && pattern.test(value);
 
@@ -26,23 +27,31 @@ export const isFullSizeUrl = matching(FULL_SIZE_URL);
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const isRecord = value => typeof value === 'object' && value !== null && !Array.isArray(value);
+
 /** @param {unknown} value */
 const text = value => (isString(value) && value.trim() ? value : undefined);
+
 /** @param {unknown} value */
 const chartRank = value => (typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined);
+
 /** @param {unknown} value */
 const rating = value =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 5 ? value : undefined;
+
 /** @param {unknown} value @returns {string[]} */
 const strings = value => (Array.isArray(value) ? value.filter(isString) : []);
+
 /** @param {unknown} value @param {(item: unknown) => item is string} [accept] @returns {string[]} */
 const uniqueIds = (value, accept = isString) => [...new Set(Array.isArray(value) ? value.filter(accept) : [])];
+
 /** @param {unknown} value @returns {Record<string, number>} */
 function ranks(value) {
   if (!isRecord(value)) return {};
+
   return Object.fromEntries(
     Object.entries(value).flatMap(([category, rank]) => {
       const valid = chartRank(rank);
+
       return valid === undefined ? [] : [[category, valid]];
     })
   );
@@ -55,7 +64,9 @@ function ranks(value) {
  */
 export function readScreenshot(value) {
   if (!isRecord(value) || !isScreenshotId(value.id) || !isAssetPath(value.path)) return null;
+
   if (!value.path.toLowerCase().startsWith(`assets/${value.id}.`)) return null;
+
   return {
     ...value,
     id: value.id,
@@ -73,15 +84,19 @@ export function readScreenshot(value) {
 /** @param {unknown} value @returns {boolean} */
 export const isReviewedScreenshot = value => {
   const screenshot = readScreenshot(value);
+
   return screenshot !== null && screenshot.sourceUrl !== undefined;
 };
 
 /** @param {unknown} value @returns {App | null} */
 export function readApp(value) {
   if (!isRecord(value)) return null;
+
   const id = text(value.id),
     name = text(value.name);
+
   if (!id || !name) return null;
+
   return {
     ...value,
     id,
@@ -110,10 +125,14 @@ const reviewedFields = value => ({
 /** @param {unknown} value @param {Set<string>} known @returns {Collection | null} */
 function readCollection(value, known) {
   if (!isRecord(value)) return null;
+
   const id = text(value.id),
     title = text(value.title);
+
   const assetIds = uniqueIds(value.assetIds).filter(screenshotId => known.has(screenshotId));
+
   if (!id || !title || assetIds.length < 2) return null;
+
   return {
     ...value,
     id,
@@ -127,10 +146,13 @@ function readCollection(value, known) {
 /** @param {unknown} value @param {Set<string>} known @returns {UiElement | null} */
 function readUiElement(value, known) {
   if (!isRecord(value)) return null;
+
   const id = text(value.id),
     title = text(value.title),
     screenId = value.screenId;
+
   if (!id || !title || !isString(screenId) || !known.has(screenId)) return null;
+
   return { ...value, id, title, screenId, evidence: text(value.evidence) ?? 'visual-review', ...reviewedFields(value) };
 }
 
@@ -144,13 +166,16 @@ function readUiElement(value, known) {
 function readList(value, read, seen = new Set()) {
   /** @type {T[]} */
   const out = [];
+
   for (const item of Array.isArray(value) ? value : []) {
     const record = read(item);
+
     if (record && !seen.has(record.id)) {
       seen.add(record.id);
       out.push(record);
     }
   }
+
   return out;
 }
 
@@ -165,6 +190,7 @@ export function readSnapshot(value) {
   const screens = readList(value.screens, readScreenshot);
   const known = new Set(screens.map(screenshot => screenshot.id));
   const coverage = isRecord(value.coverage) ? value.coverage : {};
+
   return {
     apps: readList(value.apps, readApp),
     screens,
@@ -185,12 +211,16 @@ export function mergeReviewedLibrary(snapshot, reviewed) {
   if (!isRecord(reviewed) || !Array.isArray(reviewed.flows) || !Array.isArray(reviewed.elements)) {
     throw new TypeError('Reviewed library must list flows and elements');
   }
+
   const screenIds = new Set(snapshot.screens.map(screenshot => screenshot.id));
+
   const screens = [
     ...snapshot.screens,
     ...readList(reviewed.screens, item => (isReviewedScreenshot(item) ? readScreenshot(item) : null), screenIds),
   ];
+
   const known = new Set(screens.map(screenshot => screenshot.id));
+
   return {
     ...snapshot,
     screens,

@@ -19,8 +19,11 @@ export function refusals(input, isAncestor) {
     .filter(fields => fields.length === 4)
     .flatMap(([, localSha, remoteRef, remoteSha]) => {
       if (PROTECTED.has(remoteRef)) return [`${remoteRef} is protected; push a feature branch and open a PR`];
+
       if (ZERO.test(localSha)) return [`deleting ${remoteRef} is not allowed; archive instead`];
+
       if (!ZERO.test(remoteSha) && !isAncestor(remoteSha, localSha)) return [`${remoteRef} would be force-pushed`];
+
       return [];
     });
 }
@@ -29,6 +32,7 @@ export function refusals(input, isAncestor) {
 function gitIsAncestor(ancestor, descendant) {
   try {
     execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], { stdio: 'ignore' });
+
     return true;
   } catch {
     return false;
@@ -37,6 +41,7 @@ function gitIsAncestor(ancestor, descendant) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const reasons = refusals(readFileSync(0, 'utf8'), gitIsAncestor);
+
   for (const reason of reasons) console.error(`git-guard: ${reason}`);
   process.exitCode = reasons.length ? 1 : 0;
 }

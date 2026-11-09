@@ -8,16 +8,21 @@ const origin = 'http://127.0.0.1:8765';
 const projectId = 'demo-huggingapp-auth-review';
 const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
 const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
+
 function registeredLoopbackPort(value, name) {
   const match = /^127\.0\.0\.1:(\d+)$/.exec(value || '');
   const port = Number(match?.[1]);
+
   if (!match || !Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error(`${name} must be an explicitly registered 127.0.0.1:<port> emulator endpoint.`);
+
   return port;
 }
+
 const authPort = registeredLoopbackPort(authHost, 'FIREBASE_AUTH_EMULATOR_HOST');
 const firestorePort = registeredLoopbackPort(firestoreHost, 'FIRESTORE_EMULATOR_HOST');
 const authOrigin = `http://${authHost}`;
+
 const mime = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -29,6 +34,7 @@ const mime = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
 };
+
 const config = {
   projectId,
   apiKey: `AIza${'A'.repeat(35)}`,
@@ -36,6 +42,7 @@ const config = {
   appId: '1:web:local-emulator',
   emulators: { auth: { host: '127.0.0.1', port: authPort }, firestore: { host: '127.0.0.1', port: firestorePort } },
 };
+
 const googleToken = uid =>
   `${Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: uid, email: 'google-owner@example.test', email_verified: true, iss: 'https://accounts.google.com', aud: 'synthetic-google-client' })).toString('base64url')}.`;
 
@@ -45,29 +52,35 @@ async function routes(page) {
     window.__holdPersonalBootstrap = async read => {
       const snapshot = await read,
         gate = window.__personalBootstrap;
+
       if (!gate.armed) return snapshot;
       gate.armed = false;
       gate.held = true;
       await new Promise(resolve => {
         gate.release = resolve;
       });
+
       return snapshot;
     };
+
     window.__boardCreation = { armed: false, held: false, completion: null };
     window.__holdBoardCreation = async create => {
       const id = await create,
         gate = window.__boardCreation;
+
       if (!gate.armed) return id;
       gate.armed = false;
       gate.held = true;
       await new Promise(resolve => {
         gate.release = resolve;
       });
+
       return id;
     };
   });
   page.on('request', request => {
     const url = new URL(request.url());
+
     if (url.origin === authOrigin) {
       page.__authRequests = page.__authRequests || [];
       page.__authRequests.push(url.pathname);
@@ -81,36 +94,47 @@ async function routes(page) {
   });
   page.on('response', async response => {
     const url = new URL(response.url());
+
     if (url.origin === authOrigin && response.status() >= 400) {
       let message = '';
+
       try {
         message = (await response.json()).error?.message || '';
       } catch {}
+
       page.__authFailures = page.__authFailures || [];
       page.__authFailures.push(`${response.status()} ${url.pathname}: ${message}`);
     }
+
     if (url.origin === `http://127.0.0.1:${firestorePort}` && response.status() >= 400) {
       let message = '';
+
       try {
         message = (await response.text()).slice(0, 180);
       } catch {}
+
       page.__firestoreFailures = page.__firestoreFailures || [];
       page.__firestoreFailures.push(`${response.status()} ${url.pathname}: ${message}`);
     }
   });
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
+
     if (url.origin === origin) {
       if (url.pathname === '/firebase-config.json')
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(config) });
+
       try {
         const rel = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
         const file = path.resolve(root, `.${rel}`);
+
         if (file === root || !file.startsWith(`${root}${path.sep}`))
           return route.fulfill({ status: 403, body: 'blocked path' });
         let body = await fs.readFile(file);
+
         if (rel === '/index.html')
           body = body.toString().replace('</head>', '<script type="module" src="/cloud-boards.mjs"></script></head>');
+
         if (url.pathname === '/cloud-boards.mjs') {
           // Hold the real SDK result at the personal-index boundary; getDoc uses Listen,
           // not the transaction-only batchGet transport. Observe the actual auth completion.
@@ -133,6 +157,7 @@ async function routes(page) {
               "hub.querySelector('#ha-create-board')?.addEventListener('submit',event=>{const completion=createBoard(event);if(window.__boardCreation.armed)window.__boardCreation.completion=completion;});"
             );
         }
+
         return route.fulfill({
           status: 200,
           contentType: mime[path.extname(file)] || 'application/octet-stream',
@@ -142,16 +167,20 @@ async function routes(page) {
         return route.fulfill({ status: 404, body: 'not found' });
       }
     }
+
     if (url.origin === 'https://www.gstatic.com' && url.pathname.startsWith('/firebasejs/12.19.0/'))
       return route.continue();
+
     if (url.origin === authOrigin || url.origin === `http://127.0.0.1:${firestorePort}`) {
       try {
         const response = await route.fetch({ timeout: 30000 });
+
         return route.fulfill({ response });
       } catch (error) {
         return route.fulfill({ status: 502, body: `local emulator proxy failed: ${error.message}` });
       }
     }
+
     return route.abort('blockedbyclient');
   });
 }
@@ -160,12 +189,15 @@ async function verificationCode(email) {
   const response = await fetch(`${authOrigin}/emulator/v1/projects/${projectId}/oobCodes`);
   assert.equal(response.ok, true, `Auth Emulator OOB endpoint returned ${response.status}`);
   const payload = await response.json();
+
   const record = (payload.oobCodes || []).find(
     entry =>
       entry.email?.toLowerCase() === email.toLowerCase() &&
       (entry.operation === 'VERIFY_EMAIL' || entry.requestType === 'VERIFY_EMAIL')
   );
+
   assert.ok(record?.oobCode, 'Auth Emulator did not expose a verification code for the synthetic account');
+
   return record.oobCode;
 }
 
@@ -178,6 +210,7 @@ async function signUpAndVerify(page, email) {
     .waitForFunction(
       () => {
         const status = document.querySelector('#ha-auth-status');
+
         return status?.textContent.includes('Account created.') || status?.classList.contains('error');
       },
       undefined,
@@ -198,21 +231,26 @@ async function signUpAndVerify(page, email) {
       import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
     ]);
+
     const auth = authSdk.getAuth(appSdk.getApps()[0]);
     await authSdk.applyActionCode(auth, actionCode);
     await authSdk.reload(auth.currentUser);
   }, code);
   await page.locator('#ha-account-ready [data-ha="refresh-user"]').click();
   await page.locator('#hugging-cloud-board-hub h2').getByText('Your boards').waitFor();
+
   const user = await page.evaluate(async () => {
     const appSdk = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js');
     const authSdk = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');
     const current = authSdk.getAuth(appSdk.getApps()[0]).currentUser;
     const token = await authSdk.getIdTokenResult(current);
+
     return { uid: current.uid, verified: current.emailVerified, tokenVerified: token.claims.email_verified };
   });
+
   assert.equal(user.verified, true, 'Verified email state was not refreshed in Firebase Auth');
   assert.equal(user.tokenVerified, true, 'Verified-email token claim was not refreshed before Firestore access');
+
   return user.uid;
 }
 
@@ -223,18 +261,22 @@ async function signInSyntheticGoogle(page, uid) {
       import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
     ]);
+
     const auth = authSdk.getAuth(appSdk.getApps()[0]);
     const credential = authSdk.GoogleAuthProvider.credential(token);
     await authSdk.signInWithCredential(auth, credential);
   }, googleToken(uid));
   await page.locator('#hugging-cloud-board-hub h2').getByText('Your boards').waitFor();
+
   const identity = await page.evaluate(async () => {
     const [appSdk, authSdk] = await Promise.all([
       import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
     ]);
+
     const user = authSdk.getAuth(appSdk.getApps()[0]).currentUser;
     const token = await authSdk.getIdTokenResult(user);
+
     return {
       uid: user.uid,
       email: user.email,
@@ -244,6 +286,7 @@ async function signInSyntheticGoogle(page, uid) {
       providerUid: user.providerData.find(item => item.providerId === 'google.com')?.uid,
     };
   });
+
   assert.equal(identity.providerUid, uid, 'Synthetic Google provider subject was not preserved as provider identity');
   assert.equal(identity.email, 'google-owner@example.test');
   assert.equal(
@@ -254,6 +297,7 @@ async function signInSyntheticGoogle(page, uid) {
   assert.equal(identity.verified, true);
   assert.equal(identity.tokenVerified, true);
   await page.locator('.account-dialog [data-ha="close"]').click();
+
   return identity;
 }
 
@@ -270,10 +314,12 @@ async function inviteByEmail(page, email) {
         board: document.querySelector('[data-ha="board-select"]')?.selectedOptions[0]?.textContent,
         submits: window.__inviteSubmits,
       }));
+
       throw new Error(
         `Invite creation did not render its link: ${JSON.stringify(form)}; ${await page.locator('#hugging-cloud-board-hub').innerText()}; console=${(page.__consoleErrors || []).join(' | ')}`
       );
     });
+
   return page.locator('.invite-link input').inputValue();
 }
 
@@ -281,6 +327,7 @@ async function waitForBoardOption(page, boardId, present = true) {
   await page.waitForFunction(
     ({ id, shouldExist }) => {
       const options = [...document.querySelectorAll('#hugging-cloud-board-hub [data-ha="board-select"] option')];
+
       return options.some(option => option.value === id) === shouldExist;
     },
     { id: boardId, shouldExist: present }
@@ -290,6 +337,7 @@ async function waitForBoardOption(page, boardId, present = true) {
 async function main() {
   const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' });
   const errors = [];
+
   try {
     const ownerContext = await browser.newContext();
     await ownerContext.addInitScript(() =>
@@ -325,18 +373,21 @@ async function main() {
       });
     await hub.locator('[data-ha="import-device"]').click();
     await hub.getByRole('status').getByText('Merged 1 browser save', { exact: false }).waitFor();
+
     const imported = await owner.evaluate(async id => {
       const appSdk = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js');
       const authSdk = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');
       const dbSdk = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js');
       const db = dbSdk.getFirestore(appSdk.getApps()[0]);
       const snap = await dbSdk.getDoc(dbSdk.doc(db, 'boards', id, 'items', 'screen--synthetic-import-screen'));
+
       return (
         snap.exists() &&
         snap.data().itemId === 'synthetic-import-screen' &&
         authSdk.getAuth(appSdk.getApps()[0]).currentUser.emailVerified
       );
     }, personalId);
+
     assert.equal(imported, true, 'Import button did not create the owner-only saved item in Firestore Emulator');
     await owner.locator('nav .account-nav').click();
     await owner.locator('#ha-account-ready [data-ha="signout"]').click();
@@ -431,22 +482,27 @@ async function main() {
         ),
       googleBoardId
     );
+
     const boardBootstrap = await google.evaluate(async id => {
       const [appSdk, authSdk, dbSdk] = await Promise.all([
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         db = dbSdk.getFirestore(app),
         uid = authSdk.getAuth(app).currentUser.uid;
+
       const [board, member, index] = await Promise.all([
         dbSdk.getDoc(dbSdk.doc(db, 'boards', id)),
         dbSdk.getDoc(dbSdk.doc(db, 'boards', id, 'members', uid)),
         dbSdk.getDoc(dbSdk.doc(db, 'users', uid, 'boards', id)),
       ]);
+
       return { owner: board.data()?.ownerUid, memberRole: member.data()?.role, indexRole: index.data()?.role };
     }, googleBoardId);
+
     assert.deepEqual(
       boardBootstrap,
       { owner: googleIdentity.uid, memberRole: 'owner', indexRole: 'owner' },
@@ -458,9 +514,11 @@ async function main() {
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         db = dbSdk.getFirestore(app),
         uid = authSdk.getAuth(app).currentUser.uid;
+
       await dbSdk.setDoc(dbSdk.doc(db, 'boards', id, 'items', 'screen--google-synthetic'), {
         kind: 'screen',
         itemId: 'google-synthetic',
@@ -468,20 +526,24 @@ async function main() {
         addedAt: dbSdk.serverTimestamp(),
       });
     }, googleBoardId);
+
     const privateReadCode = await google.evaluate(async id => {
       const [appSdk, dbSdk] = await Promise.all([
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       try {
         await dbSdk.getDoc(
           dbSdk.doc(dbSdk.getFirestore(appSdk.getApps()[0]), 'boards', id, 'items', 'screen--synthetic-import-screen')
         );
+
         return null;
       } catch (error) {
         return error.code;
       }
     }, personalId);
+
     assert.equal(privateReadCode, 'permission-denied', "Google account must not read the email owner's private item");
     assert.equal(
       await google.evaluate(async id => {
@@ -489,6 +551,7 @@ async function main() {
           import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
           import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
         ]);
+
         return (
           await dbSdk.getDoc(
             dbSdk.doc(dbSdk.getFirestore(appSdk.getApps()[0]), 'boards', id, 'items', 'screen--google-synthetic')
@@ -514,9 +577,11 @@ async function main() {
         option.textContent.includes('UI shared board')
       )
     );
+
     const boardId = await hub
       .locator('[data-ha="board-select"] option')
       .evaluateAll(options => options.find(option => option.textContent.includes('UI shared board')).value);
+
     await hub.locator('[data-ha="board-select"]').selectOption(boardId);
     await hub.locator('#ha-invite-form').waitFor();
     await owner.evaluate(() => {
@@ -543,9 +608,11 @@ async function main() {
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         uid = authSdk.getAuth(app).currentUser.uid,
         db = dbSdk.getFirestore(app);
+
       await dbSdk.setDoc(dbSdk.doc(db, 'boards', id, 'items', 'screen--continuity-title'), {
         kind: 'screen',
         itemId: 'continuity-title',
@@ -576,9 +643,11 @@ async function main() {
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         uid = authSdk.getAuth(app).currentUser.uid,
         db = dbSdk.getFirestore(app);
+
       await dbSdk.setDoc(dbSdk.doc(db, 'boards', id, 'items', 'screen--continuity-invite'), {
         kind: 'screen',
         itemId: 'continuity-invite',
@@ -602,9 +671,11 @@ async function main() {
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         uid = authSdk.getAuth(app).currentUser.uid,
         db = dbSdk.getFirestore(app);
+
       await dbSdk.setDoc(dbSdk.doc(db, 'boards', id, 'items', 'screen--continuity-focus'), {
         kind: 'screen',
         itemId: 'continuity-focus',
@@ -656,6 +727,7 @@ async function main() {
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const db = dbSdk.getFirestore(appSdk.getApps()[0]);
       await dbSdk.updateDoc(dbSdk.doc(db, 'boards', boardId), {
         title: 'Renamed after invitation',
@@ -686,29 +758,37 @@ async function main() {
           import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
           import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
         ]);
+
         const app = appSdk.getApps()[0],
           db = dbSdk.getFirestore(app),
           uid = authSdk.getAuth(app).currentUser?.uid;
+
         if (!uid) return false;
         const index = await dbSdk.getDoc(dbSdk.doc(db, 'users', uid, 'boards', id));
+
         return index.exists() && index.data().title === 'Renamed after invitation';
       },
       boardId,
       { timeout: 10000 }
     );
+
     const accepted = await member.evaluate(async boardId => {
       const [appSdk, authSdk, dbSdk] = await Promise.all([
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         db = dbSdk.getFirestore(app),
         uid = authSdk.getAuth(app).currentUser.uid;
+
       const index = await dbSdk.getDoc(dbSdk.doc(db, 'users', uid, 'boards', boardId));
       const member = await dbSdk.getDoc(dbSdk.doc(db, 'boards', boardId, 'members', uid));
+
       return { title: index.exists() ? index.data().title : null, email: member.exists() ? member.data().email : null };
     }, boardId);
+
     assert.equal(
       accepted.title,
       'Renamed after invitation',
@@ -739,22 +819,28 @@ async function main() {
     await memberHub.locator('[data-ha="accept-invite"]').waitFor();
     await memberHub.locator('[data-ha="accept-invite"]').click();
     await hub.locator(`[data-ha="remove-member"][data-id="${memberUid}"]`).waitFor();
+
     const priorItemId = await owner.evaluate(async id => {
       const catalog = await (await fetch('/data.json')).json();
       const itemId = catalog.screens[0].id;
+
       const [appSdk, authSdk, dbSdk] = await Promise.all([
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
         import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js'),
       ]);
+
       const app = appSdk.getApps()[0],
         uid = authSdk.getAuth(app).currentUser.uid;
+
       await dbSdk.setDoc(
         dbSdk.doc(dbSdk.getFirestore(app), 'boards', id, 'items', `screen--${encodeURIComponent(itemId)}`),
         { kind: 'screen', itemId, addedBy: uid, addedAt: dbSdk.serverTimestamp() }
       );
+
       return itemId;
     }, boardId);
+
     await owner.locator(`[data-view="${priorItemId}"]`).waitFor();
     await hub.locator('#ha-create-board input[name="title"]').fill('UID boundary draft');
     await hub.locator('#ha-invite-form input[name="email"]').fill('private-uid-draft@example.test');
@@ -763,6 +849,7 @@ async function main() {
     );
     await signInSyntheticGoogle(owner, 'synthetic-google-uid');
     await owner.waitForFunction(() => window.__personalBootstrap.held);
+
     const assertPriorPrivateStateAbsent = async () => {
       const privateText = await hub.innerText();
       assert.equal(privateText.includes('board-owner@example.test'), false, 'B must not render A identity');
@@ -795,6 +882,7 @@ async function main() {
         'A editor focus must not cross UID'
       );
     };
+
     await assertPriorPrivateStateAbsent();
     await owner.locator('nav .account-nav').click();
     await owner.locator('#ha-account-ready [data-ha="signout"]').click();
