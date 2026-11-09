@@ -19,3 +19,4 @@ node_modules/
 
 # Local environment files
 .env*
+test-artifacts/
