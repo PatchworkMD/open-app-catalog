@@ -26,8 +26,11 @@ export default {
     }
 
     let key;
-    try { key = decodeURIComponent(url.pathname.slice(1)); }
-    catch { return new Response('Not found', { status: 404, headers }); }
+    try {
+      key = decodeURIComponent(url.pathname.slice(1));
+    } catch {
+      return new Response('Not found', { status: 404, headers });
+    }
     // Asset names are content hashes, so anything else is a probe.
     if (!isAssetPath(key)) {
       return new Response('Not found', { status: 404, headers });
@@ -35,9 +38,10 @@ export default {
 
     const ifRange = request.headers.get('if-range');
     const wantsRange = request.method === 'GET' && request.headers.has('range');
-    let object = await env.MEDIA.get(key, wantsRange
-      ? { onlyIf: request.headers, range: request.headers }
-      : { onlyIf: request.headers });
+    let object = await env.MEDIA.get(
+      key,
+      wantsRange ? { onlyIf: request.headers, range: request.headers } : { onlyIf: request.headers }
+    );
     if (!object) return new Response('Not found', { status: 404, headers });
 
     object.writeHttpMetadata(headers);
@@ -56,8 +60,10 @@ export default {
 
     // onlyIf turns a cache revalidation into a body-less object.
     if (!('body' in object) || object.body === null) {
-      const failedPrecondition = failedIfMatch(request.headers.get('if-match'), object.httpEtag)
-        || (!request.headers.has('if-match') && failedIfUnmodifiedSince(request.headers.get('if-unmodified-since'), object.uploaded));
+      const failedPrecondition =
+        failedIfMatch(request.headers.get('if-match'), object.httpEtag) ||
+        (!request.headers.has('if-match') &&
+          failedIfUnmodifiedSince(request.headers.get('if-unmodified-since'), object.uploaded));
       return new Response(null, { status: failedPrecondition ? 412 : 304, headers });
     }
     if (rangeAllowed && object.range) {
@@ -78,7 +84,11 @@ function ifRangeAllows(value, etag, uploaded) {
   if (value.startsWith('W/')) return false;
   if (value.startsWith('"')) return value === etag;
   const date = Date.parse(value);
-  return Number.isFinite(date) && uploaded instanceof Date && Math.floor(uploaded.getTime() / 1000) <= Math.floor(date / 1000);
+  return (
+    Number.isFinite(date) &&
+    uploaded instanceof Date &&
+    Math.floor(uploaded.getTime() / 1000) <= Math.floor(date / 1000)
+  );
 }
 
 /** @param {string|null} value @param {string} etag */
@@ -97,6 +107,7 @@ function failedIfUnmodifiedSince(value, uploaded) {
 /** @param {string} key */
 function contentType(key) {
   const ext = key.slice(key.lastIndexOf('.') + 1).toLowerCase();
-  return { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }[ext]
-    || 'application/octet-stream';
+  return (
+    { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }[ext] || 'application/octet-stream'
+  );
 }

@@ -80,3 +80,13 @@ _Avoid_: the plugin (unqualified), the agent
 
 - The **Flows** route shows **collections**. The label stays until Austin decides on a rename (see STATUS.md).
 - The **About & sources** route is keyed `agents` in code. The key stays so existing links keep working.
+
+## Compatibility identifiers
+
+These names predate the glossary and stay because links, saved boards or published files depend on them. They are not domain terms.
+
+- `data.json`: the published Snapshot.
+- `curation.json`: the reviewed library.
+- `screens`: the Snapshot's Screenshot list, and the `#screens` route.
+- `flows`: the Snapshot's Collection list, the `#flows` route and `flows:` board keys.
+- `oac-board`, `oac-board-collections`: the device storage keys for a Board.

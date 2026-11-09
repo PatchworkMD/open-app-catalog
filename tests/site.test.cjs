@@ -1,7 +1,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { catalogBase, launchBrowser, evidencePath, fitsViewport } = require('./browser-fixture.cjs');
+const { catalogBase, launchBrowser, evidencePath, fitsViewport, fixtureSnapshot } = require('./browser-fixture.cjs');
 
 let browser;
 before(async () => {
@@ -130,5 +130,124 @@ test('denied storage keeps the board for the session and says so', async () => {
   await page.goto(base + '#screens');
   await page.locator('#content [data-save]').first().click();
   assert.match(await page.getByRole('status').first().textContent(), /Storage unavailable/);
+  await page.close();
+});
+
+test('malformed snapshot records are skipped and the board survives', async () => {
+  const { page, base, errors } = await openCatalog(null);
+  const valid = fixtureSnapshot();
+  const savedId = valid.screens[0].id;
+  await page.addInitScript(id => localStorage.setItem('oac-board', JSON.stringify([id])), savedId);
+  await page.route('**/data.json', route =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...valid,
+        apps: [
+          { id: '1', name: 7, assetIds: {} },
+          { id: '2', name: 'Broken lists', assetIds: 'x', categories: {}, chartRanks: [] },
+          ...valid.apps,
+        ],
+        screens: [
+          { id: 'not-a-hash', path: 'assets/x.png' },
+          { ...valid.screens[1], path: [valid.screens[1].path] },
+          ...valid.screens,
+        ],
+      }),
+    })
+  );
+  await page.goto(base + '#apps');
+  await page.locator('.app-open').first().waitFor();
+  await page
+    .locator('#coverage')
+    .filter({ hasText: /^61 apps · 182 screenshots/ })
+    .waitFor();
+  await page.getByRole('searchbox', { name: 'Search catalog' }).fill('Broken lists');
+  await page.getByRole('button', { name: 'Open Broken lists', exact: true }).click();
+  await page.getByText('No screenshots available yet.').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: 'Saved board', exact: true }).click();
+  await page.getByRole('heading', { name: 'Saved board', level: 1 }).waitFor();
+  assert.equal(await page.locator('#content .pin').count(), 1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a snapshot that is not a catalog shows a retry and keeps the board', async () => {
+  const { page, base, errors } = await openCatalog(null);
+  await page.addInitScript(() => localStorage.setItem('oac-board', JSON.stringify(['kept'])));
+  await page.route('**/data.json', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.goto(base);
+  await page.getByRole('button', { name: 'Try again' }).waitFor();
+  assert.match(await page.locator('#content').textContent(), /Your board remains on this device/);
+  assert.equal(await page.evaluate(() => localStorage.getItem('oac-board')), '["kept"]');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a reference page offers a keyboard skip link to its main content', async () => {
+  const { page, base, errors } = await openCatalog(null);
+  await page.goto(base + 'apps/');
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  assert.equal(await skip.evaluate(link => link === document.activeElement), true);
+  assert(await skip.evaluate(link => link.getBoundingClientRect().top >= 0), 'the focused skip link is visible');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'main');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+function contrast(foreground, background) {
+  const luminance = rgb => {
+    const [r, g, b] = rgb
+      .match(/\d+(\.\d+)?/g)
+      .slice(0, 3)
+      .map(Number)
+      .map(c => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+test('chart rank badges are opaque and meet normal-text contrast', async () => {
+  const { page } = await openCatalog('#apps');
+  const badge = page.locator('.pinrank').first();
+  await badge.waitFor();
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const { color, background } = await badge.evaluate(el => ({
+      color: getComputedStyle(el).color,
+      background: getComputedStyle(el).backgroundColor,
+    }));
+    assert.doesNotMatch(background, /rgba\([^)]*,\s*0?\.\d+\)/, 'the badge background is opaque over screenshots');
+    assert(
+      contrast(color, background) >= 4.5,
+      `badge contrast ${contrast(color, background).toFixed(2)} at ${width}px`
+    );
+  }
+  await page.close();
+});
+
+test('decorative hero motion stops within five seconds', async () => {
+  const { page } = await openCatalog('#apps');
+  await page.locator('.app-open').first().waitFor();
+  const endTimes = await page.evaluate(() =>
+    [...document.querySelectorAll('.hero *')].flatMap(el =>
+      el.getAnimations().map(animation => {
+        const timing = animation.effect.getComputedTiming();
+        return timing.endTime;
+      })
+    )
+  );
+  assert(endTimes.length > 0, 'the hero animates on load');
+  assert(
+    endTimes.every(end => Number.isFinite(end) && end <= 5000),
+    `hero animations end at ${endTimes.join(', ')}ms`
+  );
   await page.close();
 });

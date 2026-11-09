@@ -1,0 +1,229 @@
+[
+  {
+    "name": "malformed app and screenshot fields are dropped, unusable records are skipped",
+    "snapshot": {
+      "apps": [
+        {
+          "id": "1",
+          "name": 7,
+          "assetIds": {}
+        },
+        {
+          "id": "2",
+          "name": "Two",
+          "assetIds": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "nope",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            7
+          ],
+          "categories": ["Education", 3],
+          "chartRank": "1",
+          "chartRanks": {
+            "Education": 1,
+            "Bad": "x"
+          },
+          "iconPath": ["assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"],
+          "url": "javascript:alert(1)",
+          "rating": "4.5",
+          "revenueLabel": "$1 (estimated)"
+        },
+        null,
+        "x",
+        {
+          "id": "2",
+          "name": "Duplicate"
+        }
+      ],
+      "screens": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "title": 7,
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2"
+        },
+        {
+          "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "path": ["assets/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png"]
+        },
+        {
+          "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
+        },
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "title": "Duplicate"
+        }
+      ],
+      "flows": "bad",
+      "coverage": []
+    },
+    "expected": {
+      "apps": [
+        {
+          "id": "2",
+          "name": "Two",
+          "categories": ["Education"],
+          "chartRanks": {
+            "Education": 1
+          },
+          "assetIds": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+          "revenueLabel": "$1 (estimated)"
+        }
+      ],
+      "screens": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2"
+        }
+      ],
+      "flows": [],
+      "elements": [],
+      "coverage": {}
+    }
+  },
+  {
+    "name": "the reviewed library fills missing screenshots only and its references must resolve",
+    "snapshot": {
+      "apps": [],
+      "screens": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "title": "Listing title",
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2"
+        }
+      ],
+      "coverage": {
+        "generatedAt": "2026-11-01T06:17:00Z",
+        "rankBasis": "original-category-feed",
+        "apps": 1
+      }
+    },
+    "reviewed": {
+      "screens": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "title": "Reviewed title",
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2",
+          "curatedOnly": true
+        },
+        {
+          "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "path": "assets/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png",
+          "title": "Pinned",
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2",
+          "curatedOnly": true,
+          "reviewedAt": "2026-09-19"
+        },
+        {
+          "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "path": "assets/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.png",
+          "title": "No source"
+        }
+      ],
+      "flows": [
+        {
+          "id": "f1",
+          "title": "Welcome",
+          "assetIds": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        {
+          "id": "f2",
+          "title": "Too short",
+          "assetIds": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+        },
+        {
+          "id": "f3",
+          "title": "Bad",
+          "assetIds": {}
+        },
+        null
+      ],
+      "elements": [
+        {
+          "id": "e1",
+          "title": "Tab bar",
+          "screenId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "tags": ["nav", 1]
+        },
+        {
+          "id": "e2",
+          "title": "Missing",
+          "screenId": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "id": "e3",
+          "title": 7,
+          "screenId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    "expected": {
+      "apps": [],
+      "screens": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "title": "Listing title",
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2"
+        },
+        {
+          "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "path": "assets/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png",
+          "title": "Pinned",
+          "sourceUrl": "https://apps.apple.com/us/app/two/id2",
+          "curatedOnly": true,
+          "reviewedAt": "2026-09-19"
+        }
+      ],
+      "flows": [
+        {
+          "id": "f1",
+          "title": "Welcome",
+          "assetIds": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          ],
+          "evidence": "listing-collection",
+          "tags": []
+        }
+      ],
+      "elements": [
+        {
+          "id": "e1",
+          "title": "Tab bar",
+          "screenId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "evidence": "visual-review",
+          "tags": ["nav"]
+        }
+      ],
+      "coverage": {
+        "generatedAt": "2026-11-01T06:17:00Z",
+        "rankBasis": "original-category-feed",
+        "apps": 1
+      }
+    }
+  },
+  {
+    "name": "a snapshot that is not an object is rejected",
+    "snapshot": [],
+    "error": true
+  },
+  {
+    "name": "a reviewed library without flows and elements is rejected",
+    "snapshot": {},
+    "reviewed": {
+      "screens": []
+    },
+    "error": true
+  }
+]

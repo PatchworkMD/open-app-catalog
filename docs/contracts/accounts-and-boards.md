@@ -20,14 +20,14 @@ provider, Firestore database, and deployed rules are live activation gates.
 ## Firestore documents
 
 - `boards/{boardId}` stores `{ownerUid, title, createdAt, updatedAt,
-  schemaVersion, state}`. `state: "active"` is required for a usable board.
+schemaVersion, state}`. `state: "active"` is required for a usable board.
   Every board has a matching immutable `boardIdentities/{boardId}` record
   storing `{ownerUid, state, createdAt}`. Both records must be active and have
   the same owner; the identity record is created atomically with the board and
   is never client-readable, updateable, or deletable. Its retained existence
   prevents a deleted board ID from being reused.
 - `boards/{boardId}/members/{uid}` stores `{uid, email, role, joinedAt,
-  inviteId}`. The owner has role `owner`; collaborators have role `member`.
+inviteId}`. The owner has role `owner`; collaborators have role `member`.
 - `boards/{boardId}/items/{kind--encodedItemId}` stores only
   `{kind, itemId, addedBy, addedAt}`. `kind` is `screen` or `collection`;
   references point to the public catalog and contain no private user payload.
@@ -37,7 +37,7 @@ provider, Firestore database, and deployed rules are live activation gates.
   invite accepted and creates the recipient membership and index. Member removal
   and leaving atomically remove the matching membership and index.
 - `boardInvites/{inviteId}` stores `{boardId, boardTitle, ownerUid, inviteeEmail, status,
-  createdAt, acceptedByUid}`. The owner can read the owner's invites; the
+createdAt, acceptedByUid}`. The owner can read the owner's invites; the
   invited verified email can read only an invite whose status is `pending`.
   Acceptance atomically creates membership and the recipient's index.
 

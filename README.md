@@ -102,10 +102,13 @@ Neither database is deployed or exposed by the website.
 ```sh
 npm ci
 npx playwright install chromium-headless-shell
+sudo npx playwright install-deps chromium-headless-shell   # system libraries; needs root
 PLAYWRIGHT_CHANNEL=chromium-headless-shell npm run verify
 ```
 
-`npm run verify` runs the JavaScript syntax checks, pipeline tests, reference page build, and the site and Worker tests. `npm run verify:fast` skips the browser and runs on every commit through the Husky pre-commit hook, after lint-staged formats the staged files.
+Without root on Debian bookworm (amd64), replace the `install-deps` line with `npm run setup:browser-libs`. It unpacks the same libraries from deb.debian.org into the gitignored `.cache/browser-libs/`, and the test launcher picks them up automatically.
+
+`npm run verify` runs the format check, JavaScript syntax checks, strict type check, pipeline tests, reference page build, and the site and Worker tests. `npm run verify:fast` skips the page build and browser and runs on every commit through the Husky pre-commit hook, after lint-staged formats the staged files. A pre-push hook (`scripts/git-guard.mjs`) refuses pushes to the default branch, deletions and force pushes. The Update catalog workflow runs the same `npm run verify` before it commits a refresh or deploys.
 
 Browser tests serve a synthetic fixture snapshot (60 apps in 3 categories), so a catalog refresh cannot break them. Set `CATALOG_SNAPSHOT=live` to test against `site/data.json`, or set it to a file path for another snapshot. Set `CATALOG_TEST_URL` to test a deployed preview; that run does not mutate the live site. Screenshots land in `$TMPDIR/hugging-app-evidence/`.
 

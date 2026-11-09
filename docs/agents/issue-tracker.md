@@ -9,7 +9,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- **Close**: only with Austin's explicit approval for that item. Then `gh issue close <number> --comment "..."`.
 
 The repo is `PatchworkMD/open-app-catalog`. Infer it from `git remote -v`; `gh` does this automatically when run inside a clone.
 
@@ -21,7 +21,7 @@ When set to `yes`, PRs run through the same labels and states as issues, using t
 
 - **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
 - **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
-- **Comment / label / close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
+- **Comment / label**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`. Closing a PR needs Austin's explicit approval.
 
 GitHub shares one number space across issues and PRs, so a bare `#42` may be either. Resolve with `gh pr view 42` and fall back to `gh issue view 42`.
 
@@ -32,3 +32,7 @@ Create a GitHub issue.
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
+
+## Project rules
+
+Never close, delete or merge issues or PRs without Austin's decision. See the Rules in [AGENTS.md](../../AGENTS.md).
