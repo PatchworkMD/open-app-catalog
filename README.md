@@ -104,6 +104,11 @@ node tests/resolution.test.cjs
 node tests/viewer.test.cjs
 ```
 
+Pull requests and `push/**` branches run `.github/workflows/validate.yml` with
+read-only repository access and no deployment credentials. It builds reference
+pages, runs pipeline and browser tests, and uploads browser screenshots. Main
+routes are checked for horizontal overflow at 390px and 320px.
+
 The browser check covers keyboard access, filters, routes, board persistence,
 exports, comparison state, mobile layout, and load/storage failures. It uses
 an isolated browser profile and an in-memory local route, so it needs no preview
