@@ -3,6 +3,8 @@ import re
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from snapshot_rules import is_asset_path
+
 WORKER_BASE = 'https://open-app-catalog.austinwise-ev1e.workers.dev/'
 PUBLIC_BASE = 'https://catalog.patchworkmd.dev/'
 
@@ -32,7 +34,7 @@ def verify(fetcher=fetch):
     if not data.get('apps') or not data.get('screens'):
         raise RuntimeError('The deployed Worker catalog is empty')
     path = data['screens'][0].get('path', '')
-    if not re.fullmatch(r'assets/[a-f0-9]{64}\.[a-z0-9]{2,4}', path):
+    if not is_asset_path(path):
         raise RuntimeError('The deployed Worker catalog has an invalid media path')
     media = required(fetcher, WORKER_BASE + path)
     if not media:

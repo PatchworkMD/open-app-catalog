@@ -1,0 +1,82 @@
+{
+  "assetPath": {
+    "valid": [
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.webp",
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.PNG"
+    ],
+    "invalid": [
+      "",
+      "assets/abc.png",
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png?x=1",
+      "/assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.toolong",
+      "assets/gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg.png",
+      "assets/../aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+      null,
+      42
+    ]
+  },
+  "screenshotId": {
+    "valid": [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    ],
+    "invalid": [
+      "",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      null
+    ]
+  },
+  "appleSourceUrl": {
+    "valid": ["https://apps.apple.com/us/app/x/id1", "https://itunes.apple.com/us/app/id1?uo=4"],
+    "invalid": [
+      "",
+      "http://apps.apple.com/us/app/x/id1",
+      "https://apps.apple.com.evil.test/x",
+      "https://evil.test/https://apps.apple.com/",
+      "javascript:alert(1)",
+      null
+    ]
+  },
+  "fullSizeUrl": {
+    "valid": ["https://is1-ssl.mzstatic.com/image/thumb/Purple/v4/a/b.png/1290x2796bb.png"],
+    "invalid": [
+      "https://is1-ssl.mzstatic.com/image/thumb/a/640x1386bb.jpg",
+      "https://is1-ssl.mzstatic.com/image/thumb/a/1290x2796bb.png?x",
+      "https://evil.test/image/thumb/a/1290x2796bb.png",
+      null
+    ]
+  },
+  "reviewedScreenshot": {
+    "valid": [
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+        "sourceUrl": "https://apps.apple.com/us/app/x/id1"
+      }
+    ],
+    "invalid": [
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "assets/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png",
+        "sourceUrl": "https://apps.apple.com/us/app/x/id1"
+      },
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+        "sourceUrl": "https://evil.test/"
+      },
+      {
+        "id": "x",
+        "path": "assets/x.png",
+        "sourceUrl": "https://apps.apple.com/"
+      },
+      null
+    ]
+  }
+}

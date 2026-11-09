@@ -3,23 +3,26 @@
   "private": true,
   "description": "Hugging App: an open App Store chart catalog for design research",
   "license": "MIT",
+  "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "prepare": "husky",
-    "check:syntax": "node --check site/app.js && node --check site/cloud-boards.mjs && node --check worker/index.js && for f in tests/*.cjs; do node --check \"$f\" || exit 1; done",
+    "check:syntax": "node --check site/app.js && node --check site/cloud-boards.mjs && node --check site/board.js && node --check site/snapshot.js && node --check worker/index.js && for f in tests/*.cjs; do node --check \"$f\" || exit 1; done",
     "test:pipeline": "python3 -m unittest discover -s pipeline -p 'test_*.py'",
     "build:pages": "python3 pipeline/build_search_pages.py",
-    "test:unit": "node --test tests/worker.test.cjs tests/accounts.test.cjs",
+    "test:unit": "node --test tests/worker.test.cjs tests/accounts.test.cjs tests/snapshot.test.cjs tests/board.test.cjs",
     "test:site": "node --test --test-concurrency=1 tests/*.test.cjs",
-    "verify:fast": "npm run check:syntax && npm run test:pipeline && npm run test:unit",
-    "verify": "npm run check:syntax && npm run test:pipeline && npm run build:pages && npm run test:site"
+    "verify:fast": "npm run check:syntax && npm run typecheck && npm run test:pipeline && npm run test:unit",
+    "verify": "npm run check:syntax && npm run typecheck && npm run test:pipeline && npm run build:pages && npm run test:site",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
     "husky": "9.1.7",
     "lint-staged": "17.6.0",
     "playwright": "1.63.0",
-    "prettier": "3.9.10"
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
   }
 }

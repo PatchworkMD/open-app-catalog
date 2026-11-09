@@ -1,4 +1,5 @@
-'use strict';
+import {createBoard} from './board.js';
+import {isAssetPath, isAppleSourceUrl, isFullSizeUrl, isReviewedScreenshot, normalizeSnapshot} from './snapshot.js';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const categoriesForApp = app => Array.isArray(app.categories) && app.categories.length ? app.categories : [app.category].filter(Boolean);
@@ -10,38 +11,31 @@ const catalogCategories = () => [...new Set([
 ].filter(Boolean))].sort();
 const routes = {apps:'Apps',screens:'Screens',flows:'Flows',elements:'UI elements',boards:'Saved board',agents:'About & sources',plugin:'Hugging App plugin'};
 let viewerState = null, curationState = 'loading', resolutionMap = {}, catalogScreenCount = 0;
-let data, limit = 48, selected = new Set(), board = [], savedCollections = [], storageWarning = '', remoteBoard = false;
-try { board = JSON.parse(localStorage.getItem('oac-board') || '[]'); if (!Array.isArray(board)) board = []; } catch { board = []; }
-try { savedCollections = JSON.parse(localStorage.getItem('oac-board-collections') || '[]'); if (!Array.isArray(savedCollections)) savedCollections = []; } catch { savedCollections = []; }
-function readDeviceBoard() {
-  const read = key => { try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
-  return {screens:read('oac-board'),collections:read('oac-board-collections')};
-}
+let data, limit = 48, selected = new Set();
+const deviceStorage = {getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value)};
+const board = createBoard(deviceStorage);
+const refreshBoard = () => { if (data && route() === 'boards') render(); else syncActions(); };
 window.HuggingCatalog = {
-  getDeviceBoard: readDeviceBoard,
-  applyRemoteBoard(value) {
-    remoteBoard = true;
-    board = Array.isArray(value?.screens) ? value.screens : [];
-    savedCollections = Array.isArray(value?.collections) ? value.collections : [];
-    storageWarning = '';
-    if (data && route() === 'boards') render(); else syncActions();
-  },
-  useDeviceBoard() {
-    remoteBoard = false;
-    const value = readDeviceBoard(); board = value.screens; savedCollections = value.collections;
-    if (data && route() === 'boards') render(); else syncActions();
-  }
+  getDeviceBoard: board.readDevice,
+  applyRemoteBoard(value) { board.useRemote(value); refreshBoard(); },
+  useDeviceBoard() { board.useDevice(); refreshBoard(); }
 };
-function reportBoardChange(kind, id, saved) {
-  if (remoteBoard) window.dispatchEvent(new CustomEvent('hugging:board-change', {detail:{kind,id,saved}}));
+const actionText = (text, item) => `<span class="action-text">${text}</span><span class="sr-only"> ${esc(item)}</span>`;
+function saveButton(id, item) {
+  const on = board.has('screen', id);
+  return `<button data-save="${esc(id)}" aria-pressed="${on}">${actionText(on ? 'Saved' : 'Save', item)}</button>`;
+}
+function compareButton(id, item) {
+  const on = selected.has(id);
+  return `<button data-select="${esc(id)}" aria-pressed="${on}">${actionText(on ? 'Selected' : 'Compare', item)}</button>`;
 }
 const route = () => Object.hasOwn(routes, location.hash.slice(1)) ? location.hash.slice(1) : 'apps';
-const sourceLink = u => /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
+const sourceLink = u => isAppleSourceUrl(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">View on the App Store ↗</a>` : '';
 function media(s, fullSize = false) {
   const candidate = s.fullSizeUrl || resolutionMap[s.id] || '';
-  const full = /^https:\/\/is[0-9]+-ssl\.mzstatic\.com\/image\/thumb\/[^?#]+\/1290x2796bb\.png$/.test(candidate) ? candidate : '';
+  const full = isFullSizeUrl(candidate) ? candidate : '';
   const p = String(s.path || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
+  return isAssetPath(p) ? `<img data-catalog-media src="${esc(fullSize && full ? full : p)}" ${!fullSize && full ? `srcset="${esc(p)} 1x, ${esc(full.replace('1290x2796bb.png', '640x1386bb.jpg'))} 2x"` : ''} data-preview="${esc(p)}" loading="eager" alt="${esc(s.title || 'App Store screenshot')}">` : '<span>Media unavailable</span>';
 }
 function handleMediaError(image) {
   const preview = image.dataset.preview;
@@ -60,10 +54,10 @@ document.addEventListener('error', event => {
 }, true);
 function appIcon(x) {
   const p = String(x.iconPath || '');
-  return /^assets\/[a-f0-9]+\.[a-z0-9]+$/i.test(p) ? `<img class="icon" data-catalog-icon src="${esc(p)}" loading="eager" alt="">` : '<div class="icon-ph"></div>';
+  return isAssetPath(p) ? `<img class="icon" data-catalog-icon src="${esc(p)}" loading="eager" alt="">` : '<div class="icon-ph"></div>';
 }
 function screenCard(s) {
-  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></article>`;
+  return `<article class="pin"><button class="pinmedia screen-open" data-view="${esc(s.id)}" aria-label="Open ${esc(s.title || 'screen')}">${media(s)}</button><p class="pincaption">${esc(s.title || 'Screen reference')}</p><span class="pinmeta">${esc(s.category || 'App Store')}</span><div class="pinactions">${saveButton(s.id, s.title || 'screenshot')}${compareButton(s.id, s.title || 'screenshot')}</div></article>`;
 }
 function screenIds(ids) {
   const known = new Set((data.screens || []).map(s => s.id));
@@ -72,8 +66,8 @@ function screenIds(ids) {
 function curationCard(x, kind) {
   const ids = kind === 'flows' ? x.assetIds : [x.screenId];
   const shots = ids.map(id => data.screens.find(s => s.id === id)).filter(Boolean);
-  const collectionId = `${kind}:${x.id}`, isSaved = savedCollections.includes(collectionId);
-  const actions = kind === 'flows' ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${isSaved}">${isSaved ? 'Saved' : 'Save collection'}</button>` : ids.map(id => `<button data-save="${esc(id)}" aria-pressed="${board.includes(id)}">${board.includes(id) ? 'Saved' : 'Save'}</button><button data-select="${esc(id)}" aria-pressed="${selected.has(id)}">${selected.has(id) ? 'Selected' : 'Compare'}</button>`).join('');
+  const collectionId = `${kind}:${x.id}`, isSaved = board.has('collection', collectionId);
+  const actions = kind === 'flows' ? `<button data-save-collection="${esc(collectionId)}" aria-pressed="${isSaved}">${actionText(isSaved ? 'Saved' : 'Save collection', x.title)}</button>` : ids.map(id => saveButton(id, x.title) + compareButton(id, x.title)).join('');
   return `<article class="pin collection-card collection-${kind}"><button class="collection-open" data-collection="${esc(x.id)}" data-collection-kind="${kind}" aria-label="Open ${esc(x.title)}"><div class="collection-previews">${shots.map(s => `<span>${media(s)}</span>`).join('')}</div><span class="pincaption">${esc(x.title)}</span><span class="pinmeta">${esc(x.category || 'Curated reference')}${x.appName ? ` · ${esc(x.appName)}` : ''} · ${shots.length} screenshot${shots.length === 1 ? '' : 's'}</span><p class="collection-description">${esc(x.description || '')}</p></button><div class="pinactions">${actions}</div></article>`;
 }
 function appCard(x) {
@@ -86,7 +80,7 @@ function appCard(x) {
   return `<article class="pin"><button class="app-open" data-related="${esc(x.id)}" aria-label="Open ${esc(x.name)}"><div class="pinmedia">${shot ? media(shot) : `<div class="pinfallback">${appIcon(x)}</div>`}${rank}</div><span class="pincaption">${esc(x.name)}</span><span class="pinmeta">${esc(labels.join(' · ') || 'App Store')}</span></button></article>`;
 }
 function appDetailCard(s, index, appId) {
-  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div></div></article>`;
+  return `<article class="app-detail-card"><button class="app-detail-image" data-view="${esc(s.id)}" data-return-app="${esc(appId)}" aria-label="Open app screenshot ${index + 1}">${media({...s,title:`Screenshot ${index + 1}`})}</button><div class="app-detail-caption"><span>Screenshot ${index + 1}</span><div class="pinactions">${saveButton(s.id, s.title || 'screenshot')}${compareButton(s.id, s.title || 'screenshot')}</div></div></article>`;
 }
 function matchesFilters(x) {
   const q = $('#search').value.toLowerCase().trim(), cat = $('#category').value;
@@ -103,20 +97,20 @@ function filtered(items) {
 }
 function currentItems() {
   const r = route();
-  const items = r === 'boards' ? data.screens.filter(s => board.includes(s.id)) : data[r] || [];
+  const items = r === 'boards' ? data.screens.filter(s => board.has('screen', s.id)) : data[r] || [];
   return filtered(r === 'screens' ? items.filter(s => !s.curatedOnly) : items);
 }
 function currentBoardCollections() {
   return [
     ...(data.flows || []).map(record => ({kind:'flows',record})),
     ...(data.elements || []).map(record => ({kind:'elements',record}))
-  ].filter(({kind,record}) => savedCollections.includes(`${kind}:${record.id}`) && matchesFilters(record));
+  ].filter(({kind,record}) => board.has('collection', `${kind}:${record.id}`) && matchesFilters(record));
 }
 function mergeCuration(curation) {
   if (!curation || typeof curation !== 'object') return;
   const knownScreens = new Set(data.screens.map(s => s.id));
   for (const s of Array.isArray(curation.screens) ? curation.screens : []) {
-    if (s && /^[a-f0-9]{64}$/.test(s.id || '') && new RegExp('^assets/' + s.id + '\\.[a-z0-9]+$', 'i').test(s.path || '') && /^https:\/\/(apps\.apple\.com|itunes\.apple\.com)\//.test(s.sourceUrl || '') && !knownScreens.has(s.id)) {
+    if (isReviewedScreenshot(s) && !knownScreens.has(s.id)) {
       data.screens.push(s); knownScreens.add(s.id);
     }
   }
@@ -143,7 +137,7 @@ function fillHero() {
   const nodes = document.querySelectorAll('.float-card');
   const shots = [...data.apps].sort((a,b) => (a.chartRank ?? 999) - (b.chartRank ?? 999)).map(a => data.screens.find(s => (a.assetIds || []).includes(s.id))).filter(Boolean);
   nodes.forEach((el,i) => { if (shots[i]) el.innerHTML = media(shots[i]); });
-  const copy = $('#hero p');
+  const copy = $('#hero p:not(.hero-title)');
   if (copy) copy.textContent = `Up to 100 free-chart apps per category. ${data.apps.length.toLocaleString()} apps and ${catalogScreenCount.toLocaleString()} listing screenshots to explore.`;
 }
 function render() {
@@ -165,10 +159,10 @@ function render() {
   }
   $('#export').disabled = false;
   const items = currentItems(), collections = r === 'boards' ? currentBoardCollections() : [];
-  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? (remoteBoard ? ' · synced board' : ' · saved on this device') : ''}${storageWarning ? ' · ' + storageWarning : ''}`;
+  $('#status').textContent = `${(items.length + collections.length).toLocaleString()} results${r === 'boards' ? (board.remote ? ' · synced board' : ' · saved on this device') : ''}${board.warning ? ' · ' + board.warning : ''}`;
   $('#more').hidden = items.length <= limit;
   $('#content').className = ['elements','flows'].includes(r) || collections.length ? 'grid curated-grid' : 'grid';
-  const empty = r === 'boards' ? '<h2>Your board is empty.</h2><p>Save screenshots or a curated flow, then export your research board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h2>No ${esc(routes[r].toLowerCase())} in this dataset</h2><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h2>No matching results</h2><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
+  const empty = r === 'boards' ? '<h2>Your board is empty.</h2><p>Save screenshots or a collection, then export your board.</p><a href="#flows">Explore flows ↗</a>' : ['flows','elements'].includes(r) ? `<h2>No ${esc(routes[r].toLowerCase())} in this dataset</h2><p>Apple listing screenshots do not include complete flows or tagged UI elements. These sections require manual curation.</p><a href="#screens">Explore captured screens ↗</a>` : '<h2>No matching results</h2><p>Try a different search or clear your filters.</p><button data-reset>Clear filters</button>';
   const collectionCards = collections.map(({kind,record}) => curationCard(record,kind));
   const screenCards = items.slice(0,limit).map(x => r === 'apps' ? appCard(x) : ['flows','elements'].includes(r) ? curationCard(x, r) : screenCard(x));
   const cards = [...collectionCards,...screenCards];
@@ -186,7 +180,7 @@ function renderScreen() {
   const returnApp = viewerState.returnAppId ? data.apps.find(app => app.id === viewerState.returnAppId) : null;
   const back = returnApp ? `<button class="screen-back" data-back-app="${esc(returnApp.id)}">Back to app</button>` : '';
   $('#viewerTitle').textContent = title;
-  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span>${back}<div class="pinactions"><button data-save="${esc(s.id)}" aria-pressed="${board.includes(s.id)}">${board.includes(s.id) ? 'Saved' : 'Save'}</button><button data-select="${esc(s.id)}" aria-pressed="${selected.has(s.id)}">${selected.has(s.id) ? 'Selected' : 'Compare'}</button></div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
+  $('#viewerContent').innerHTML = `<div class="screen-stage"><button class="screen-prev" data-step="-1" aria-label="Previous screenshot" ${index === 0 ? 'disabled' : ''}>Previous</button><figure class="screen-canvas">${media(s, true)}</figure><button class="screen-next" data-step="1" aria-label="Next screenshot" ${index === shots.length - 1 ? 'disabled' : ''}>Next</button></div><div class="screen-toolbar"><span class="screen-position" role="status">${index + 1} / ${shots.length}</span>${back}<div class="pinactions">${saveButton(s.id, s.title || 'screenshot')}${compareButton(s.id, s.title || 'screenshot')}</div>${sourceLink(s.sourceUrl)}</div><div class="screen-thumbnails" aria-label="Screenshots">${shots.map((shot, i) => `<button data-thumb="${i}" aria-label="Screenshot ${i + 1}" aria-current="${i === index ? 'true' : 'false'}">${media({...shot,title:`Screenshot ${i + 1}`})}</button>`).join('')}</div><p class="screen-context">${esc(context || 'Developer-published listing screenshots')}</p>`;
   $('#viewerContent').scrollTop = 0;
   $('.screen-thumbnails [aria-current="true"]')?.scrollIntoView({block:'nearest',inline:'nearest'});
 }
@@ -228,8 +222,10 @@ function viewCollection(id, kind) {
 
 function syncActions() {
   document.querySelectorAll('[data-save],[data-select],[data-save-collection]').forEach(b => {
-    const collection = b.dataset.saveCollection, save = Boolean(b.dataset.save), on = collection ? savedCollections.includes(collection) : save ? board.includes(b.dataset.save) : selected.has(b.dataset.select);
-    b.textContent = collection ? (on ? 'Saved' : 'Save collection') : on ? (save ? 'Saved' : 'Selected') : (save ? 'Save' : 'Compare');
+    const collection = b.dataset.saveCollection, save = Boolean(b.dataset.save), on = collection ? board.has('collection', collection) : save ? board.has('screen', b.dataset.save) : selected.has(b.dataset.select);
+    const text = collection ? (on ? 'Saved' : 'Save collection') : on ? (save ? 'Saved' : 'Selected') : (save ? 'Save' : 'Compare');
+    const label = b.querySelector('.action-text');
+    if (label) label.textContent = text; else b.textContent = text;
     b.setAttribute('aria-pressed', String(on));
   });
   $('#compareCount').textContent = selected.size;
@@ -249,21 +245,13 @@ document.addEventListener('click', e => {
     const target = b.hasAttribute('data-thumb') ? `[data-thumb="${index}"]` : `[data-step="${b.dataset.step}"]`;
     const next = $(target); (next && !next.disabled ? next : $('.screen-thumbnails [aria-current="true"]'))?.focus({preventScroll:true});
   } else if (b.hasAttribute('data-reset')) { $('#search').value = ''; $('#category').value = ''; limit = 48; render(); }
-  else if (b.dataset.saveCollection) {
-    const id = b.dataset.saveCollection;
-    savedCollections = savedCollections.includes(id) ? savedCollections.filter(x => x !== id) : [...savedCollections,id];
-    if (!remoteBoard) try { localStorage.setItem('oac-board-collections',JSON.stringify(savedCollections)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
-    reportBoardChange('collection',id,savedCollections.includes(id));
+  else if (b.dataset.saveCollection || b.dataset.save) {
+    const kind = b.dataset.saveCollection ? 'collection' : 'screen', id = b.dataset.saveCollection || b.dataset.save;
+    const saved = board.toggle(kind, id);
+    if (board.remote) window.dispatchEvent(new CustomEvent('hugging:board-change', {detail:{kind,id,saved}}));
     if (route() === 'boards') render();
     syncActions();
-    if (storageWarning) $('#status').textContent = storageWarning;
-  } else if (b.dataset.save) {
-    const id = b.dataset.save; board = board.includes(id) ? board.filter(x => x !== id) : [...board,id];
-    if (!remoteBoard) try { localStorage.setItem('oac-board',JSON.stringify(board)); storageWarning = ''; } catch { storageWarning = 'Storage unavailable; changes last for this session only'; }
-    reportBoardChange('screen',id,board.includes(id));
-    if (route() === 'boards') render();
-    syncActions();
-    if (storageWarning) $('#status').textContent = storageWarning;
+    if (board.warning) $('#status').textContent = board.warning;
   } else if (b.dataset.select) {
     const id = b.dataset.select;
     if (selected.has(id)) selected.delete(id); else if (selected.size < 4) selected.add(id); else { $('#status').textContent = 'Compare up to four screens at a time'; return; }
@@ -280,6 +268,9 @@ document.addEventListener('click', e => {
     openApp(x);
   }
 });
+document.addEventListener('click', e => { if (e.target.closest('[data-reload]')) location.reload(); });
+$('.skip-link').addEventListener('click', e => { e.preventDefault(); $('#title').focus(); });
+$('.hero-cta').addEventListener('click', () => $('.heading').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'}));
 $('#compare').onclick = () => {
   if (!data) return;
   if (selected.size < 2) { $('#status').textContent = 'Select at least two screens to compare'; return; }
@@ -311,8 +302,7 @@ $('#content').className = 'grid';
 $('#content').innerHTML = Array(12).fill('<div class="skel" aria-hidden="true"></div>').join('');
 Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch(() => ({})), fetch('data.json').then(r => { if (!r.ok) throw Error('Catalog unavailable'); return r.json(); })]).then(([sources, d]) => {
   resolutionMap = sources && typeof sources === 'object' && !Array.isArray(sources) ? sources : {};
-  data = d;
-  for (const key of ['apps','screens','flows','elements']) if (!Array.isArray(data[key])) data[key] = [];
+  data = normalizeSnapshot(d);
   catalogScreenCount = data.screens.length;
   const cats = catalogCategories();
   $('#category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
@@ -320,7 +310,7 @@ Promise.all([fetch('image-sources.json').then(r => r.ok ? r.json() : {}).catch((
   loadCuration();
 }).catch(() => {
   $('#hero').hidden = true; $('#coverage').textContent = 'The catalog could not load.';
-  $('#content').innerHTML = '<div class="empty"><h2>We could not load the library.</h2><p>Your saved board remains on this device.</p><button onclick="location.reload()">Try again</button></div>';
+  $('#content').innerHTML = '<div class="empty"><h2>We could not load the library.</h2><p>Your saved board remains on this device.</p><button data-reload>Try again</button></div>';
 });
 
 async function loadCuration() {
