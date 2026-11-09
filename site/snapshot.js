@@ -29,9 +29,10 @@ const isRecord = value => typeof value === 'object' && value !== null && !Array.
 /** @param {unknown} value */
 const text = value => (isString(value) && value.trim() ? value : undefined);
 /** @param {unknown} value */
-const integer = value => (typeof value === 'number' && Number.isInteger(value) ? value : undefined);
+const chartRank = value => (typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined);
 /** @param {unknown} value */
-const finite = value => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+const rating = value =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 5 ? value : undefined;
 /** @param {unknown} value @returns {string[]} */
 const strings = value => (Array.isArray(value) ? value.filter(isString) : []);
 /** @param {unknown} value @param {(item: unknown) => item is string} [accept] @returns {string[]} */
@@ -41,7 +42,7 @@ function ranks(value) {
   if (!isRecord(value)) return {};
   return Object.fromEntries(
     Object.entries(value).flatMap(([category, rank]) => {
-      const valid = integer(rank);
+      const valid = chartRank(rank);
       return valid === undefined ? [] : [[category, valid]];
     })
   );
@@ -87,12 +88,12 @@ export function readApp(value) {
     name,
     category: text(value.category),
     categories: strings(value.categories),
-    chartRank: integer(value.chartRank),
+    chartRank: chartRank(value.chartRank),
     chartRanks: ranks(value.chartRanks),
     assetIds: uniqueIds(value.assetIds, isScreenshotId),
     iconPath: isAssetPath(value.iconPath) ? value.iconPath : undefined,
     url: isAppleSourceUrl(value.url) ? value.url : undefined,
-    rating: finite(value.rating),
+    rating: rating(value.rating),
   };
 }
 

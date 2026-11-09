@@ -214,6 +214,85 @@
     }
   },
   {
+    "name": "chart ranks are whole numbers from 1 and ratings are finite on the 0 to 5 scale",
+    "snapshot": {
+      "apps": [
+        {
+          "id": "3",
+          "name": "Ranks",
+          "chartRank": 1.0,
+          "chartRanks": {
+            "Education": 1.0,
+            "Games": 2.5,
+            "Lifestyle": 0,
+            "Utilities": true,
+            "Social Networking": 3
+          },
+          "rating": 4.5
+        },
+        {
+          "id": "4",
+          "name": "Out of range",
+          "chartRank": -1,
+          "rating": 7
+        },
+        {
+          "id": "5",
+          "name": "Zero rating",
+          "rating": 0,
+          "chartRank": "1"
+        },
+        {
+          "id": "6",
+          "name": "Overflow",
+          "rating": 1e999
+        }
+      ]
+    },
+    "expected": {
+      "apps": [
+        {
+          "id": "3",
+          "name": "Ranks",
+          "categories": [],
+          "chartRank": 1,
+          "chartRanks": {
+            "Education": 1,
+            "Social Networking": 3
+          },
+          "assetIds": [],
+          "rating": 4.5
+        },
+        {
+          "id": "4",
+          "name": "Out of range",
+          "categories": [],
+          "chartRanks": {},
+          "assetIds": []
+        },
+        {
+          "id": "5",
+          "name": "Zero rating",
+          "categories": [],
+          "chartRanks": {},
+          "assetIds": [],
+          "rating": 0
+        },
+        {
+          "id": "6",
+          "name": "Overflow",
+          "categories": [],
+          "chartRanks": {},
+          "assetIds": []
+        }
+      ],
+      "screens": [],
+      "flows": [],
+      "elements": [],
+      "coverage": {}
+    }
+  },
+  {
     "name": "a snapshot that is not an object is rejected",
     "snapshot": [],
     "error": true

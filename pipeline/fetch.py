@@ -25,6 +25,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from snapshot import rating
+
 ROOT = Path(__file__).resolve().parents[1]
 SITE_DIR = ROOT / "site"
 ASSETS_DIR = SITE_DIR / "assets"
@@ -111,7 +113,6 @@ def read_lookup_result(result: object) -> dict | None:
     name = result.get("trackName")
     if not isinstance(track_id, str) or not track_id.isdecimal() or not isinstance(name, str) or not name.strip():
         return None
-    rating = result.get("averageUserRating")
     count = result.get("userRatingCount")
     screenshots = result.get("screenshotUrls")
     return {
@@ -122,8 +123,8 @@ def read_lookup_result(result: object) -> dict | None:
         "artworkUrl512": _https(result.get("artworkUrl512")),
         "artworkUrl100": _https(result.get("artworkUrl100")),
         "artworkUrl60": _https(result.get("artworkUrl60")),
-        "averageUserRating": rating if isinstance(rating, (int, float)) and not isinstance(rating, bool) else None,
-        "userRatingCount": count if isinstance(count, int) and not isinstance(count, bool) else None,
+        "averageUserRating": rating(result.get("averageUserRating")),
+        "userRatingCount": count if isinstance(count, int) and not isinstance(count, bool) and count >= 0 else None,
     }
 
 
@@ -325,11 +326,17 @@ def preserve_curated_screens(data: dict, curation: dict) -> None:
         data["coverage"]["screens"] = len(data["screens"])
 
 
+def strict_json(value: object, **options) -> str:
+    """Standard JSON only: NaN or Infinity raise ValueError instead of being written as non-JSON tokens."""
+    return json.dumps(value, allow_nan=False, **options)
+
+
 def main() -> None:
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     data = build()
     if not data["apps"] or not data["screens"]:
         raise RuntimeError("catalog build returned an empty snapshot")
+    strict_json(data)
     out = SITE_DIR / "data.json"
     curation_out = SITE_DIR / "curation.json"
     previous = json.loads(out.read_text()) if out.exists() else {}
@@ -345,8 +352,10 @@ def main() -> None:
     }
     temp = out.with_suffix(".json.tmp")
     curation_temp = curation_out.with_suffix(".json.tmp")
-    temp.write_text(json.dumps(data, indent=2, sort_keys=True))
-    curation_temp.write_text(json.dumps(curation, indent=2))
+    payload = strict_json(data, indent=2, sort_keys=True)
+    curation_payload = strict_json(curation, indent=2)
+    temp.write_text(payload)
+    curation_temp.write_text(curation_payload)
     temp.replace(out)
     curation_temp.replace(curation_out)
     print(f"wrote {out} ({len(data['apps'])} apps, {len(data['screens'])} screens)")
@@ -358,7 +367,7 @@ def reconcile_current_snapshot() -> None:
     curation = json.loads(curation_path.read_text())
     reconcile_curated_screens(snapshot, curation)
     temp = curation_path.with_suffix(".json.tmp")
-    temp.write_text(json.dumps(curation, indent=2))
+    temp.write_text(strict_json(curation, indent=2))
     temp.replace(curation_path)
 
 

@@ -63,6 +63,33 @@ class SearchPagesTest(unittest.TestCase):
             self.assertIn('Kept app', page)
             self.assertIn(f'assets/{sid}.png', page)
 
+    def test_reviewed_source_actions_only_link_verified_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ids = ['1' * 64, '2' * 64, '3' * 64]
+            url = 'https://apps.apple.com/us/app/source/id321'
+            data = {'coverage': {'generatedAt': '2026-11-01T06:17:00Z'},
+                    'apps': [{'id': '321', 'name': 'Source app', 'assetIds': ids, 'url': url}],
+                    'screens': [{'id': sid, 'path': f'assets/{sid}.png', 'sourceUrl': url} for sid in ids]}
+            element = lambda record_id, screen_id, **source: {'id': record_id, 'title': record_id, 'screenId': screen_id, 'reviewedAt': '2026-10-01', **source}
+            curation = {'flows': [], 'screens': [], 'elements': [
+                element('missing-source', ids[0]),
+                element('invalid-source', ids[1], sourceUrl='javascript:alert(1)'),
+                element('verified-source', ids[2], sourceUrl=url),
+            ]}
+            (root / 'data.json').write_text(json.dumps(data))
+            (root / 'curation.json').write_text(json.dumps(curation))
+
+            build(root)
+
+            page = (root / 'ui-elements/index.html').read_text()
+            sections = {section.split('</h2>')[0]: section for section in page.split('<section><h2>')[1:]}
+            self.assertNotIn('App Store source', sections['missing-source'])
+            self.assertNotIn('App Store source', sections['invalid-source'])
+            self.assertIn(f'<a href="{url}">App Store source ↗</a>', sections['verified-source'])
+            self.assertNotIn('href=""', page)
+            self.assertNotIn('javascript:', page)
+
     def test_empty_input_does_not_replace_existing_pages(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
